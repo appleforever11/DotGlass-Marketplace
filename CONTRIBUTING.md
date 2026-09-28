@@ -27,7 +27,8 @@ Widgets/
 └── MyWidget/
     ├── widget.json
     ├── MyWidgetPlugin.swift
-    └── MyWidgetView.swift
+    ├── MyWidgetView.swift
+    └── preview.png        (optional, see "Marketplace artwork")
 ```
 
 ## 2. Write `widget.json`
@@ -267,7 +268,24 @@ Rules, matching the built-in Now Playing volume scroll:
 - Momentum-phase trackpad events are filtered out by the host.
 - `scrollSessionEnded()` fires when the pointer leaves your widget — commit any in-progress state there.
 
-## House style
+## 8. Marketplace artwork (optional)
+
+Drop a `preview.png` next to your `widget.json` and the marketplace shows it on
+your widget's card and at the top of its detail sheet. Without one, the card
+shows your `iconSymbol` on a tinted face.
+
+- PNG, exactly **1080 x 608** pixels (16:9), at most 1.5 MB, not animated
+- One image for both light and dark mode
+- Artwork, not a screenshot: one hero object that says what the widget does, on
+  a soft gradient backdrop, no text and no UI chrome. `AppVolumeMixer` (glass
+  faders) and `StorageMonitor` (glass capacity rings) are the reference
+- The card crops nothing, but it is shown at roughly a fifth of full size, so
+  keep the subject big and centred
+
+The image is not part of your widget's code hash: adding or changing it never
+offers an update to people who already installed the widget. CI re-encodes it
+before publishing, so only pixel data ships.
+
 
 Widgets in this repo are consistent with each other on purpose. These come up in
 almost every review, so save yourself a round:
@@ -313,10 +331,10 @@ product means a new id and a new submission.
 **Metadata matches.** `author` in `widget.json` is your GitHub username, and the
 plugin's `name` / `widgetDescription` match the `name` / `description` there.
 
-**Folder contents.** `widget.json` plus the `.swift` files listed in `sources`,
-all at the top level of your folder. Nothing else: no subfolders, no unlisted
-`.swift` files, no README, changelog, docs, screenshots, examples or scripts. CI
-rejects the PR otherwise.
+**Folder contents.** `widget.json`, the `.swift` files listed in `sources` and an
+optional `preview.png`, all at the top level of your folder. Nothing else: no
+subfolders, no unlisted `.swift` files, no README, changelog, docs, screenshots,
+examples or scripts. CI rejects the PR otherwise.
 
 **Updating an existing widget?** Edit its files in place. Don't add a second
 `widget.json` or a duplicate plugin class alongside the originals.
@@ -387,4 +405,4 @@ bash scripts/build-widgets.sh Widgets/YourWidget
 4. Run `python3 scripts/validate-widgets.py` and fix anything it reports
 5. Open a PR
 
-CI runs the same validation (folder contents, `widget.json` fields, lint) before it compiles anything. I'll review the code and merge if it's good.
+CI runs the same validation (folder contents, `widget.json` fields, `preview.png`, lint) before it compiles anything. I'll review the code and merge if it's good.

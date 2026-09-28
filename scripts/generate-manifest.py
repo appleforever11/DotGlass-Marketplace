@@ -2,11 +2,14 @@
 """Generate manifest.json from all widget.json files."""
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from widget_rules import WidgetRuleError, source_hash, validate
+from widget_rules import PREVIEW_NAME, WidgetRuleError, check_png, source_hash, validate
+
+SRGB_PROFILE = Path("/System/Library/ColorSync/Profiles/sRGB Profile.icc")
 
 
 def sha256_of_file(path: Path) -> str:
@@ -27,6 +30,32 @@ def first_published(widget_json: Path) -> str | None:
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
     return out[-1] if out else None
+
+
+def stage_preview(widget_dir: Path, out_dir: Path) -> str | None:
+    """Re-encodes preview.png into `out_dir` under a content-hashed name and
+    returns its site-relative path, or None when the widget has no preview.
+
+    Decoding and re-encoding with sips means only pixel data is published, never
+    the author's original bytes. The hashed name lets clients cache forever.
+    """
+    source = widget_dir / PREVIEW_NAME
+    if not source.exists():
+        return None
+    sips = shutil.which("sips")
+    if sips is None:
+        raise SystemExit("sips (macOS) is required to publish preview images")
+    name = f"{widget_dir.name}-{sha256_of_file(source)[:16]}.png"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / name
+    command = [sips, "-s", "format", "png"]
+    if SRGB_PROFILE.exists():
+        command += ["-m", str(SRGB_PROFILE)]
+    subprocess.run(command + [str(source), "--out", str(target)], check=True, capture_output=True)
+    problems = check_png(target)
+    if problems:
+        raise SystemExit(f"{widget_dir.name}: re-encoded preview failed validation: {problems}")
+    return f"previews/{name}"
 
 
 def main():
@@ -67,6 +96,10 @@ def main():
             "bundleFilename": bundle_name + ".zip",
             "sourceDirectory": widget_dir.name,
         }
+
+        preview = stage_preview(widget_dir, build_dir / "previews")
+        if preview:
+            entry["preview"] = preview
 
         added_at = first_published(widget_dir / "widget.json")
         if added_at:

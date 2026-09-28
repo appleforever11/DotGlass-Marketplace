@@ -39,6 +39,7 @@ jobs:
           mkdir -p _site/bundles
           cp manifest.json _site/
           cp build/*.bundle.zip _site/bundles/
+          if [ -d build/previews ]; then cp -R build/previews _site/previews; fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

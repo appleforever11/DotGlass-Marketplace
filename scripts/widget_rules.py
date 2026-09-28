@@ -12,7 +12,9 @@ or exits non-zero with the rule violations.
 import hashlib
 import json
 import re
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 FOLDER_NAME = re.compile(r"^[A-Za-z0-9-]+$")
@@ -22,6 +24,14 @@ SOURCE_FILENAME = re.compile(r"^[A-Za-z0-9_+-]+\.swift$")
 VALID_ORIENTATIONS = {"horizontal", "vertical"}
 VALID_SLOT_SPANS = (2, 3)
 IGNORED_ENTRIES = {".DS_Store"}
+
+# Optional marketplace artwork. Not part of the source hash: changing it never
+# offers installed users an update.
+PREVIEW_NAME = "preview.png"
+PREVIEW_SIZE = (1080, 608)
+PREVIEW_MAX_BYTES = 1_500_000
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+ANIMATION_CHUNKS = {b"acTL", b"fcTL", b"fdAT"}
 
 # Process spawning and dynamic code loading. Human review is the real boundary;
 # this catches the obvious spellings, including the ones the old grep missed.
@@ -117,8 +127,8 @@ def check_metadata(widget_dir: Path, meta: dict) -> list[str]:
 
 
 def check_folder_contents(widget_dir: Path, sources: list[str]) -> list[str]:
-    """Only widget.json and the listed sources may live in a widget folder."""
-    allowed = {"widget.json", *sources}
+    """Only widget.json, the listed sources and preview.png may live in a widget folder."""
+    allowed = {"widget.json", PREVIEW_NAME, *sources}
     problems = []
     for entry in sorted(widget_dir.iterdir()):
         if entry.name in IGNORED_ENTRIES:
@@ -128,7 +138,7 @@ def check_folder_contents(widget_dir: Path, sources: list[str]) -> list[str]:
         elif entry.is_dir():
             problems.append(f"{entry.name}/ is a folder; widgets may not contain folders")
         elif entry.name not in allowed:
-            problems.append(f"{entry.name} is not widget.json or a listed source")
+            problems.append(f"{entry.name} is not widget.json, {PREVIEW_NAME} or a listed source")
     return problems
 
 
@@ -144,6 +154,57 @@ def lint_sources(widget_dir: Path, sources: list[str]) -> list[str]:
     return problems
 
 
+def check_png(path: Path, size: tuple[int, int] = PREVIEW_SIZE, max_bytes: int = PREVIEW_MAX_BYTES) -> list[str]:
+    """Structural PNG check without decoding pixels: signature, IHDR first, every
+    chunk CRC, no animation chunks, IEND last with nothing after it, exact size."""
+    name = path.name
+    if path.is_symlink() or not path.is_file():
+        return [f"{name} is not a regular file"]
+    data = path.read_bytes()
+    if len(data) > max_bytes:
+        return [f"{name} is {len(data)} bytes; the limit is {max_bytes}"]
+    if not data.startswith(PNG_SIGNATURE):
+        return [f"{name} is not a PNG file"]
+    position = len(PNG_SIGNATURE)
+    dimensions = None
+    ended = False
+    while position + 12 <= len(data):
+        length = struct.unpack(">I", data[position:position + 4])[0]
+        kind = data[position + 4:position + 8]
+        body_end = position + 8 + length
+        if body_end + 4 > len(data):
+            return [f"{name} is truncated inside a {kind!r} chunk"]
+        body = data[position + 8:body_end]
+        crc = struct.unpack(">I", data[body_end:body_end + 4])[0]
+        if zlib.crc32(kind + body) & 0xFFFFFFFF != crc:
+            return [f"{name} has a corrupt {kind!r} chunk"]
+        if dimensions is None:
+            if kind != b"IHDR" or length != 13:
+                return [f"{name} does not start with an IHDR chunk"]
+            dimensions = struct.unpack(">II", body[:8])
+        if kind in ANIMATION_CHUNKS:
+            return [f"{name} is animated; previews must be a still image"]
+        position = body_end + 4
+        if kind == b"IEND":
+            ended = True
+            break
+    if not ended:
+        return [f"{name} has no IEND chunk"]
+    if position != len(data):
+        return [f"{name} has data after its IEND chunk"]
+    if dimensions != size:
+        return [f"{name} is {dimensions[0]}x{dimensions[1]}; it must be {size[0]}x{size[1]} pixels"]
+    return []
+
+
+def check_preview(widget_dir: Path) -> list[str]:
+    """Validates preview.png when the widget ships one."""
+    path = widget_dir / PREVIEW_NAME
+    if not path.exists() and not path.is_symlink():
+        return []
+    return check_png(path)
+
+
 def validate(widget_dir: Path) -> tuple[dict, list[str]]:
     """Runs every rule; returns the metadata and the ordered source list."""
     if widget_dir.is_symlink():
@@ -155,6 +216,7 @@ def validate(widget_dir: Path) -> tuple[dict, list[str]]:
     except WidgetRuleError as error:
         raise WidgetRuleError(problems + error.problems)
     problems += check_folder_contents(widget_dir, sources)
+    problems += check_preview(widget_dir)
     problems += lint_sources(widget_dir, sources)
     if problems:
         raise WidgetRuleError(problems)
