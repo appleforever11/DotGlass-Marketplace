@@ -274,18 +274,42 @@ Drop a `preview.png` next to your `widget.json` and the marketplace shows it on
 your widget's card and at the top of its detail sheet. Without one, the card
 shows your `iconSymbol` on a tinted face.
 
-- PNG, exactly **1080 x 608** pixels (16:9), at most 1.5 MB, not animated
+### Size
+
+| | Requirement |
+|---|---|
+| Canvas | exactly **1080 x 608 px** (16:9). Design at 540 x 304 pt and export @2x |
+| Format | PNG, sRGB, fully opaque, not animated |
+| File size | 1.5 MB at most. Aim for under 500 KB; the reference images are about 300 KB |
+| Safe area | keep everything important inside the centre **952 x 480 px** (a 64 px margin on every side) |
+
+CI rejects any other pixel size, so export at exactly 1080 x 608.
+
+Where it shows up:
+
+- **Grid card**: scaled down to about 240 pt wide (under half size) with 10 pt
+  rounded corners. The corners clip about 46 px of the full-size image, which is
+  what the safe area protects. Anything smaller than about 40 px, or any line
+  thinner than about 6 px, disappears at this size
+- **Detail sheet**: about 520 pt wide (close to full size) with 14 pt corners
+
+Nothing is cropped beyond the rounded corners, and the image is never
+stretched. Transparent pixels would show the card's grey background, so fill
+the whole canvas.
+
+### Style
+
 - One image for both light and dark mode
 - Artwork, not a screenshot: one hero object that says what the widget does, on
   a soft gradient backdrop, no text and no UI chrome. `AppVolumeMixer` (glass
   faders) and `StorageMonitor` (glass capacity rings) are the reference
-- The card crops nothing, but it is shown at roughly a fifth of full size, so
-  keep the subject big and centred
+- Keep the subject big and centred; it has to read at card size
 
 The image is not part of your widget's code hash: adding or changing it never
 offers an update to people who already installed the widget. CI re-encodes it
 before publishing, so only pixel data ships.
 
+## House style
 
 Widgets in this repo are consistent with each other on purpose. These come up in
 almost every review, so save yourself a round:
