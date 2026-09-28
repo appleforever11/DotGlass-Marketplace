@@ -25,6 +25,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate widget folders
+        run: python3 scripts/validate-widgets.py
+
       - name: Build all widgets
         run: bash scripts/build-widgets.sh
 

@@ -13,55 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Folder names, widget.json fields, folder contents (widget.json plus the
+      # listed top-level .swift files, nothing else) and the unsafe-API lint over
+      # exactly the files the build compiles. Runs before anything is built.
+      - name: Validate widget folders
+        run: python3 scripts/validate-widgets.py
+
       - name: Build widgets
         run: bash scripts/build-widgets.sh
-
-      - name: Validate widget folder names
-        run: |
-          for dir in Widgets/*/; do
-            name=$(basename "$dir")
-            if ! echo "$name" | grep -qE '^[A-Za-z0-9-]+$'; then
-              echo "::error::Widget folder '$name' contains invalid characters. Use only letters, numbers, and hyphens."
-              exit 1
-            fi
-          done
-          echo "Folder names valid"
-
-      - name: Validate orientations field
-        run: |
-          VALID_VALUES='["horizontal","vertical"]'
-          FAILED=0
-          for dir in Widgets/*/; do
-            json="$dir/widget.json"
-            [ -f "$json" ] || continue
-            orientations=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(sorted(d.get('orientations',[]))))" "$json")
-            if [ "$orientations" = "[]" ]; then
-              echo "::error file=$json::Missing or empty 'orientations' field. Must contain at least one of: horizontal, vertical"
-              FAILED=1
-              continue
-            fi
-            for val in $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [print(v) for v in d.get('orientations',[])]" "$json"); do
-              if [ "$val" != "horizontal" ] && [ "$val" != "vertical" ]; then
-                echo "::error file=$json::Invalid orientation '$val'. Must be 'horizontal' or 'vertical'"
-                FAILED=1
-              fi
-            done
-          done
-          if [ "$FAILED" -eq 1 ]; then exit 1; fi
-          echo "Orientations valid"
-
-      - name: Lint for unsafe APIs
-        run: |
-          UNSAFE_PATTERNS="Process\(|NSTask|dlopen|dlsym|[^.]system\(|^system\(|popen\("
-          FOUND=0
-          for dir in Widgets/*/; do
-            for f in "$dir"/*.swift; do
-              [ -f "$f" ] || continue
-              if grep -qE "$UNSAFE_PATTERNS" "$f"; then
-                echo "::error file=$f::Contains unsafe API usage"
-                FOUND=1
-              fi
-            done
-          done
-          if [ "$FOUND" -eq 1 ]; then exit 1; fi
-          echo "Lint passed"

@@ -54,35 +54,30 @@ for WIDGET_DIR in "${WIDGET_DIRS[@]}"; do
         continue
     fi
 
-    WIDGET_ID=$(python3 -c "import json; d=json.load(open('$WIDGET_JSON')); print(d['id'])")
-    PRINCIPAL_CLASS=$(python3 -c "import json; d=json.load(open('$WIDGET_JSON')); print(d['principalClass'])")
-    SOURCES_JSON=$(python3 -c "import json; d=json.load(open('$WIDGET_JSON')); print(' '.join(d['sources']))")
-
-    if [ -z "$WIDGET_ID" ] || [ -z "$PRINCIPAL_CLASS" ] || [ -z "$SOURCES_JSON" ]; then
-        echo "  FAIL: Could not parse widget.json"
+    # widget_rules.py validates the folder and prints the id, the principal class,
+    # then one plain source filename per line.
+    if ! BUILD_INFO=$(python3 "$SCRIPT_DIR/widget_rules.py" build-info "$WIDGET_DIR"); then
+        echo "  FAIL: widget breaks the folder rules (see RULE lines above)"
         FAIL_COUNT=$((FAIL_COUNT + 1))
         echo ""
         continue
     fi
+
+    WIDGET_ID=""
+    PRINCIPAL_CLASS=""
+    SOURCE_FILES=()
+    LINE_NUMBER=0
+    while IFS= read -r line; do
+        case $LINE_NUMBER in
+            0) WIDGET_ID="$line" ;;
+            1) PRINCIPAL_CLASS="$line" ;;
+            *) SOURCE_FILES+=("$WIDGET_DIR/$line") ;;
+        esac
+        LINE_NUMBER=$((LINE_NUMBER + 1))
+    done <<< "$BUILD_INFO"
 
     echo "  ID:    $WIDGET_ID"
     echo "  Class: $PRINCIPAL_CLASS"
-
-    SOURCE_FILES=()
-    MISSING=0
-    for src in $SOURCES_JSON; do
-        if [ ! -f "$WIDGET_DIR/$src" ]; then
-            echo "  FAIL: Missing source: $src"
-            MISSING=1
-        fi
-        SOURCE_FILES+=("$WIDGET_DIR/$src")
-    done
-
-    if [ "$MISSING" -eq 1 ]; then
-        FAIL_COUNT=$((FAIL_COUNT + 1))
-        echo ""
-        continue
-    fi
 
     BUNDLE_DIR="$BUILD_DIR/${WIDGET_NAME}.bundle"
     BUNDLE_MACOS="$BUNDLE_DIR/Contents/MacOS"

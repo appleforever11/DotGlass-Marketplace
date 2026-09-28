@@ -52,7 +52,7 @@ Widgets/
 - **maxSlotSpan** (optional) - `2` or `3`. Set `3` if your widget also renders a triple-width slot (see [Triple slot](#triple-slot-optional)). Leave it out for the default of `2`. The host never gives your widget a slot span you didn't declare, so only opt in once your layouts actually handle it.
 - **requiresFeatureLevel** (optional) - minimum client SDK feature level your widget needs. Leave it out unless you use newer SDK surface; clients below the level see "Requires app update" instead of an install/update button, and keep any installed older build running. Current levels: `2` if your `settingsSchema()` returns a `.table` setting. Capability protocols like `WidgetScrollHandling` do NOT need a level — old clients ignore them safely.
 - **principalClass** - must match your plugin class name exactly
-- **sources** - all your `.swift` files, order doesn't matter
+- **sources** - all your `.swift` files, order doesn't matter. Plain filenames only: every source sits directly in your widget folder, no subfolders, no `../` paths, no symlinks
 
 ## 3. Write the plugin class
 
@@ -313,8 +313,10 @@ product means a new id and a new submission.
 **Metadata matches.** `author` in `widget.json` is your GitHub username, and the
 plugin's `name` / `widgetDescription` match the `name` / `description` there.
 
-**Folder contents.** `widget.json` plus `.swift` files, nothing else. No README,
-changelog, docs, screenshots, examples or scripts.
+**Folder contents.** `widget.json` plus the `.swift` files listed in `sources`,
+all at the top level of your folder. Nothing else: no subfolders, no unlisted
+`.swift` files, no README, changelog, docs, screenshots, examples or scripts. CI
+rejects the PR otherwise.
 
 **Updating an existing widget?** Edit its files in place. Don't add a second
 `widget.json` or a duplicate plugin class alongside the originals.
@@ -325,7 +327,7 @@ End every file with a newline.
 
 I review every PR manually. These will get rejected:
 
-- `Process`, `NSTask`, `dlopen`, `dlsym`, `system()`, `popen()` - no spawning processes
+- `Process`, `NSTask`, `posix_spawn`, `fork`, `exec*`, `dlopen`, `dlsym`, `system()`, `popen()` - no spawning processes or loading code
 - private API of any kind, not just private framework imports. `@_silgen_name`
   bindings to undocumented symbols get past the lint but are the same thing and
   will be caught in review
@@ -382,6 +384,7 @@ bash scripts/build-widgets.sh Widgets/YourWidget
 1. Fork this repo
 2. Add your widget in `Widgets/YourWidget/`
 3. Test it with `build-widgets.sh`
-4. Open a PR
+4. Run `python3 scripts/validate-widgets.py` and fix anything it reports
+5. Open a PR
 
-CI will check that it compiles and passes lint. I'll review the code and merge if it's good.
+CI runs the same validation (folder contents, `widget.json` fields, lint) before it compiles anything. I'll review the code and merge if it's good.
