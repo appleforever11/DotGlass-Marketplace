@@ -38,6 +38,12 @@ test('rendered messages, guarded sends, duplicate suppression and acknowledgemen
    check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='call-unavailable','disabled call is unavailable');
    call.disabled=false;call.removeAttribute('aria-label');call.setAttribute('title','Call');
    check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='started','title-only call control');
+   const mic=document.createElement('button');mic.setAttribute('aria-label','Unmute microphone');document.body.append(mic);let micClicks=0;
+   mic.onclick=()=>{micClicks++;mic.setAttribute('aria-label',mic.getAttribute('aria-label').startsWith('Unmute')?'Mute microphone':'Unmute microphone')};
+   check(__dotGlass.setMuted(false,'https://chatgpt.com/dots/other')==='not-ready','microphone room guard');
+   check(__dotGlass.setMuted(false,'https://chatgpt.com/dots/test-room')==='changed','explicit unmute control');
+   check(__dotGlass.setMuted(false,'https://chatgpt.com/dots/test-room')==='unchanged' && micClicks===1,'unmute does not toggle back to mute');
+   check(__dotGlass.setMuted(true,'https://chatgpt.com/dots/test-room')==='changed' && micClicks===2,'explicit mute control');
    check(__dotGlass.openSignIn()===false,'no invented sign-in control');
    const login=document.createElement('button');login.textContent='Log in';document.body.append(login);let logins=0;login.onclick=()=>logins++;
    check(__dotGlass.openSignIn()===true,'open visible login');__dotGlass.openSignIn();check(logins===1,'sign-in clicks only once');
@@ -81,6 +87,8 @@ test('voice meter observes only inbound audio and stops after disconnect', async
  assert.equal(received.at(-1).connected,true);assert.equal(received.at(-1).level,0.2);
  assert.equal(received.at(-1).meterAvailable,true);
  peer.muted=true;await window.__dotGlassVoice.sample();assert.equal(received.at(-1).connected,true,'muting does not end the call');
+ assert.equal(received.at(-1).muted,true,'muted sender is visible to the glass interface');
+ peer.muted=false;await window.__dotGlassVoice.sample();assert.equal(received.at(-1).muted,false,'unmute updates native status');
  peer.microphone=false;await window.__dotGlassVoice.sample();assert.equal(received.at(-1).connected,false);
  peer.microphone=true;peer.connectionState='connected';peer.events.track();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(received.at(-1).connected,true,'track events publish without a polling tick');

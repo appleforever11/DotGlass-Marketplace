@@ -103,6 +103,18 @@ enum DotPageAdapter {
         button.click();
         return 'started';
       };
+      const setMuted = (shouldMute, expectedRoom) => {
+        if (!room() || room() !== expectedRoom) return 'not-ready';
+        const muteLabels = ['mute', 'mute microphone', 'mute mic', 'turn microphone off'];
+        const unmuteLabels = ['unmute', 'unmute microphone', 'unmute mic', 'turn microphone on'];
+        const find = labels => Array.from(document.querySelectorAll('button, [role="button"]')).find(el =>
+          visible(el) && !el.closest('.message-row, .composer-wrap') && !el.disabled && el.getAttribute('aria-disabled') !== 'true' &&
+          [el.getAttribute('aria-label'), el.getAttribute('title'), el.innerText]
+            .some(label => label && labels.includes(normalize(label).toLowerCase())));
+        const button = find(shouldMute ? muteLabels : unmuteLabels);
+        if (!button) return find(shouldMute ? unmuteLabels : muteLabels) ? 'unchanged' : 'unavailable';
+        button.click(); return 'changed';
+      };
       let signInClicked = false;
       const openSignIn = () => {
         if (signInClicked) return true;
@@ -110,7 +122,7 @@ enum DotPageAdapter {
         if (!button) return false;
         signInClicked = true; button.click(); return true;
       };
-      window.__dotGlass = {send, startCall, openSignIn, resetCall: () => { callRequested = false; }, refresh:publish};
+      window.__dotGlass = {send, startCall, setMuted, openSignIn, resetCall: () => { callRequested = false; }, refresh:publish};
       window.addEventListener('pagehide', () => {observer.disconnect();  clearTimeout(timer);});
       window.addEventListener('online', schedule); window.addEventListener('offline', schedule);
       document.addEventListener('play', schedule, true); document.addEventListener('pause', schedule, true);

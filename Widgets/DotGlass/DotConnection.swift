@@ -30,6 +30,8 @@ final class DotConnection: NSObject {
     var voiceConnected = false
     var voiceLevel = 0.0
     var voiceMeterAvailable = false
+    var microphoneMuted = false
+    var microphoneChangePending = false
     private(set) var webView: WKWebView!
     private(set) var conversation = ""
     private var timeout: Task<Void, Never>?
@@ -66,6 +68,8 @@ final class DotConnection: NSObject {
         webView.underPageBackgroundColor = .clear
     }
 
+    @ObservationIgnored private var lastCaptureState: WKMediaCaptureState?
+    @ObservationIgnored private var observedInboundAudio = false
     @ObservationIgnored private var lastTick = Date.distantPast
     @ObservationIgnored private var tickInFlight = false
     @ObservationIgnored private var lastTranscriptTick = Date.distantPast
@@ -76,6 +80,13 @@ final class DotConnection: NSObject {
         guard !visiblePanels.isEmpty || voiceStarting || voiceConnected else { return }
         guard !tickInFlight, Date().timeIntervalSince(lastTick) >= 0.24,
               webView.url?.host == "chatgpt.com" else { return }
+        if voiceStarting || voiceConnected {
+            let capture = webView.microphoneCaptureState
+            if capture != lastCaptureState {
+                lastCaptureState = capture
+                callLog.notice("Microphone state: active=\(capture == .active) muted=\(capture == .muted)")
+            }
+        }
         let now = Date()
         let refreshTranscript = !visiblePanels.isEmpty && now.timeIntervalSince(lastTranscriptTick) >= 1.5
         guard refreshTranscript || voiceStarting || voiceConnected else { return }
@@ -275,6 +286,7 @@ final class DotConnection: NSObject {
             return
         }
         guard !voiceStarting, !voiceConnected else { return }
+        observedInboundAudio = false; lastCaptureState = nil
         callLog.notice("Call requested")
         voiceEnding = false; voiceStarting = true; showConnection = false; notice = nil
         webView.callAsyncJavaScript("return window.__dotGlass?.startCall(room) ?? 'not-ready';",
@@ -303,6 +315,25 @@ final class DotConnection: NSObject {
         }
     }
 
+    func toggleMicrophone() {
+        guard voiceConnected, !microphoneChangePending else { return }
+        microphoneChangePending = true
+        webView.callAsyncJavaScript("return window.__dotGlass?.setMuted(muted, room) ?? 'unavailable';",
+            arguments: ["muted": !microphoneMuted, "room": conversation], in: nil, in: .page) { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                self.microphoneChangePending = false
+                if case .success(let value) = result, let status = value as? String,
+                   ["changed", "unchanged"].contains(status) {
+                    self.notice = nil
+                    self.webView.evaluateJavaScript("window.__dotGlassVoice?.sample();", completionHandler: nil)
+                } else {
+                    self.notice = "Open the connection view to change ChatGPT’s microphone control."
+                }
+            }
+        }
+    }
+
     func panelAppeared(_ identity: UUID) {
         visiblePanels.insert(identity)
         callLog.notice("Conversation panel appeared")
@@ -324,7 +355,7 @@ final class DotConnection: NSObject {
         webView.setMicrophoneCaptureState(.none, completionHandler: nil)
         webView.pauseAllMediaPlayback(completionHandler: nil)
         if voiceConnected || hadCapture || wasStarting { webView.load(URLRequest(url: DotURLPolicy.conversation(conversation) ?? DotURLPolicy.home)) }
-        voiceConnected = false; voiceLevel = 0
+        voiceConnected = false; voiceLevel = 0; microphoneMuted = false; microphoneChangePending = false
     }
     func receiveVoice(_ value: DotVoiceSnapshot) {
         if value.connected != voiceConnected { callLog.notice("WebRTC connection changed: \(value.connected)") }
@@ -339,9 +370,14 @@ final class DotConnection: NSObject {
         if value.connected && !voiceConnected {
             webView.evaluateJavaScript("window.__dotGlass?.resetCall()", completionHandler: nil)
         }
+        if value.connected && value.level > 0.025 && !observedInboundAudio {
+            observedInboundAudio = true
+            callLog.notice("Inbound audio received")
+        }
         voiceConnected = value.connected
         voiceLevel = min(1, max(0, value.level.isFinite ? value.level : 0))
         voiceMeterAvailable = value.meterAvailable
+        microphoneMuted = value.connected && ((value.muted ?? false) || webView.microphoneCaptureState == .muted)
     }
 }
 

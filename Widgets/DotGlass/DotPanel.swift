@@ -63,6 +63,12 @@ struct DotPanel: View {
                 if connection.voiceConnected || connection.voiceStarting { connection.stopAudio() }
                 else { connection.startCall() }
             }
+            if connection.voiceConnected {
+                DotIconButton(title: connection.microphoneMuted ? "Unmute microphone" : "Mute microphone",
+                              symbol: connection.microphoneMuted ? "mic.slash.fill" : "mic.fill",
+                              destructive: connection.microphoneMuted, action: connection.toggleMicrophone)
+                    .disabled(connection.microphoneChangePending)
+            }
             DotIconButton(title: connection.showConnection ? "Show glass conversation" : "Show ChatGPT connection",
                           symbol: connection.showConnection ? "bubble.left.and.bubble.right" : "link") {
                 connection.showConnection.toggle()
@@ -91,7 +97,8 @@ struct DotPanel: View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
                 DotRing(phase: connection.phase, energy: connection.voiceLevel, diameter: 98)
-                Text(connection.phase.rawValue).font(.caption).foregroundStyle(.secondary)
+                Text(connection.voiceConnected && connection.microphoneMuted ? "Microphone muted · Dot can’t hear you" : connection.phase.rawValue)
+                    .font(.caption).foregroundStyle(connection.voiceConnected && connection.microphoneMuted ? Color.orange : Color.secondary)
             }.padding(.top, 4).padding(.bottom, 12).frame(maxWidth: .infinity)
             Rectangle().fill(.primary.opacity(0.06)).frame(height: 0.5).padding(.horizontal, 22)
             if connection.messages.isEmpty {

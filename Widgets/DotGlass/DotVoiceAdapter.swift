@@ -23,14 +23,16 @@ enum DotVoiceAdapter {
       async function sample() {
         if (busy || stopped) return;
         busy = true;
-        let connected = false, level = 0, meterAvailable = false;
+        let connected = false, level = 0, meterAvailable = false, muted = true;
         try {
           for (const peer of peers) {
             if (peer.connectionState !== 'connected') continue;
-            if (!peer.getSenders().some(s => s.track?.kind === 'audio' && s.track.readyState === 'live')) continue;
+            const senders = peer.getSenders().filter(s => s.track?.kind === 'audio' && s.track.readyState === 'live');
+            if (!senders.length) continue;
             const receivers = peer.getReceivers().filter(r => r.track?.kind === 'audio' && r.track.readyState === 'live');
             if (!receivers.length) continue;
             connected = true;
+            if (senders.some(s => s.track.enabled)) muted = false;
             const stats = await peer.getStats();
             stats.forEach(stat => {
               if (stat.type !== 'inbound-rtp' || (stat.kind || stat.mediaType) !== 'audio') return;
@@ -46,7 +48,7 @@ enum DotVoiceAdapter {
               }
             });
           }
-          const value = {connected, level: Math.round(Math.min(1, level * 5) * 100) / 100, meterAvailable};
+          const value = {connected, muted: connected && muted, level: Math.round(Math.min(1, level * 5) * 100) / 100, meterAvailable};
           const encoded = JSON.stringify(value);
           if (encoded !== previous) {previous = encoded; window.webkit?.messageHandlers.dotGlass.postMessage(value);}
         } catch (_) { /* Audio/session data is never logged. */ }

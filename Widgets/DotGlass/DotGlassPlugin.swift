@@ -34,6 +34,6 @@ struct DotCompact: View {
         .contentShape(Rectangle())
         .aspectRatio(1, contentMode: .fit)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Dot Glass, \(themeName). \(connection.phase.rawValue). Open conversation panel.")
+        .accessibilityLabel("Dot Glass, \(themeName). \(connection.phase.rawValue). \(connection.microphoneMuted ? "Microphone muted." : "") Open conversation panel.")
     }
 }

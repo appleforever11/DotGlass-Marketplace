@@ -55,6 +55,10 @@ struct ConnectionChecks {
         connection.receiveVoice(DotVoiceSnapshot(connected: false, level: 0, meterAvailable: false))
         connection.receiveVoice(DotVoiceSnapshot(connected: true, level: .nan, meterAvailable: true))
         precondition(connection.voiceLevel == 0, "Meter input must be finite")
+        connection.receiveVoice(DotVoiceSnapshot(connected: true, level: 0, meterAvailable: true, muted: true))
+        precondition(connection.microphoneMuted && connection.voiceConnected, "Mute must be visible without ending a call")
+        connection.receiveVoice(DotVoiceSnapshot(connected: true, level: 0, meterAvailable: true, muted: false))
+        precondition(!connection.microphoneMuted, "Unmuting must clear the native warning")
         connection.voiceConnected = false
         print("Connection checks passed: setup, call guard, origin, drafts, pending delivery, reconnect, stale voice, bounded meter")
     }

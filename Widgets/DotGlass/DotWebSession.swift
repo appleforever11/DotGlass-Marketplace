@@ -67,9 +67,9 @@ extension DotConnection: WKNavigationDelegate, WKUIDelegate {
 }
 
 enum DotWebViewport {
-    // The narrow ChatGPT Dot layout omits its call control. WebKit page zoom
-    // provides a desktop CSS viewport without enlarging the host-owned panel.
-    static func zoom(width: CGFloat, isConversation: Bool) -> CGFloat {
+    // Keep CSS pixels and virtualized message measurements at their normal size.
+    // Scale the rendered view, rather than WebKit page zoom, into the host panel.
+    static func scale(width: CGFloat, isConversation: Bool) -> CGFloat {
         guard isConversation, width > 0 else { return 1 }
         return min(1, max(0.25, width / 1100))
     }
@@ -80,10 +80,13 @@ struct DotWebSession: View {
     @Bindable var connection: DotConnection
     var body: some View {
         GeometryReader { geometry in
-            DotWebContent(connection: connection,
-                          zoom: DotWebViewport.zoom(width: geometry.size.width,
-                                                    isConversation: !connection.conversation.isEmpty))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            let scale = DotWebViewport.scale(width: geometry.size.width,
+                                             isConversation: !connection.conversation.isEmpty)
+            DotWebContent(connection: connection)
+                .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
+                .scaleEffect(scale, anchor: .topLeading)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
+                .clipped()
         }
     }
 }
@@ -91,9 +94,8 @@ struct DotWebSession: View {
 @MainActor
 private struct DotWebContent: NSViewRepresentable {
     let connection: DotConnection
-    let zoom: CGFloat
     func makeNSView(context: Context) -> WKWebView { connection.webView }
     func updateNSView(_ view: WKWebView, context: Context) {
-        if abs(view.pageZoom - zoom) > 0.001 { view.pageZoom = zoom }
+        if view.pageZoom != 1 { view.pageZoom = 1 }
     }
 }

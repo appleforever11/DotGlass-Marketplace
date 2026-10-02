@@ -57,4 +57,5 @@ struct DotVoiceSnapshot: Decodable {
     let connected: Bool
     let level: Double
     let meterAvailable: Bool
+    var muted: Bool? = nil
 }
