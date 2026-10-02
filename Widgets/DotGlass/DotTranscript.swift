@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DotTranscript: View {
     @Bindable var connection: DotConnection
     @State private var atBottom = true

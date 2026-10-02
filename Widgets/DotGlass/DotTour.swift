@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DotTour: View {
     @Bindable var connection: DotConnection
     @State private var page = 0

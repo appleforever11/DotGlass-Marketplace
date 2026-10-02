@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DotOnboarding: View {
     @Bindable var connection: DotConnection
 

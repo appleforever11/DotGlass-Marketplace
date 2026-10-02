@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DotPicker: View {
     @Bindable var connection: DotConnection
     @Environment(\.dismiss) private var dismiss

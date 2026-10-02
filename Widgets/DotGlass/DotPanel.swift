@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DotPanel: View {
     @Bindable var connection: DotConnection
     var dismiss: () -> Void = {}

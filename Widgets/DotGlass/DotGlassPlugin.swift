@@ -20,6 +20,7 @@ final class DotGlassPlugin: WidgetPlugin, DockDoorWidgetProvider {
     @MainActor func makePanelBody(dismiss: @escaping () -> Void) -> AnyView? { AnyView(DotPanel(connection: connection, dismiss: dismiss).frame(width: 440, height: 640)) }
 }
 
+@MainActor
 struct DotCompact: View {
     let size: CGSize
     let vertical: Bool
