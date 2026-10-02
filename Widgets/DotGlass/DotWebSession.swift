@@ -65,8 +65,34 @@ extension DotConnection: WKNavigationDelegate, WKUIDelegate {
     }
 }
 
-struct DotWebSession: NSViewRepresentable {
+enum DotWebViewport {
+    // The narrow ChatGPT Dot layout omits its call control. WebKit page zoom
+    // provides a desktop CSS viewport without enlarging the host-owned panel.
+    static func zoom(width: CGFloat, isConversation: Bool) -> CGFloat {
+        guard isConversation, width > 0 else { return 1 }
+        return min(1, max(0.25, width / 1100))
+    }
+}
+
+@MainActor
+struct DotWebSession: View {
     @Bindable var connection: DotConnection
+    var body: some View {
+        GeometryReader { geometry in
+            DotWebContent(connection: connection,
+                          zoom: DotWebViewport.zoom(width: geometry.size.width,
+                                                    isConversation: !connection.conversation.isEmpty))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+}
+
+@MainActor
+private struct DotWebContent: NSViewRepresentable {
+    let connection: DotConnection
+    let zoom: CGFloat
     func makeNSView(context: Context) -> WKWebView { connection.webView }
-    func updateNSView(_ view: WKWebView, context: Context) {}
+    func updateNSView(_ view: WKWebView, context: Context) {
+        if abs(view.pageZoom - zoom) > 0.001 { view.pageZoom = zoom }
+    }
 }

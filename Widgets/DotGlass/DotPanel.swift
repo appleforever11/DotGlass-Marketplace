@@ -141,7 +141,7 @@ struct DotPanel: View {
     private var connectionFooter: some View {
         VStack(spacing: 8) {
             if let notice = connection.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-            Text("Sign in to ChatGPT, then open Your Dot. Your conversation appears here automatically after setup.")
+            Text(connection.ready ? "Your Dot is connected. Choose Done to return to the glass conversation." : "Sign in to ChatGPT, then open Your Dot. Your conversation appears here automatically after setup.")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
             HStack {
                 Button("Back to setup", action: connection.cancelSetup)

@@ -13,6 +13,8 @@ swiftc -target "${test_arch}-apple-macosx14.0" -emit-library -emit-module -modul
 install_name_tool -id @rpath/libDockDoorWidgetSDK.dylib "$test_dir/libDockDoorWidgetSDK.dylib"
 swiftc -parse-as-library -target "${test_arch}-apple-macosx14.0" -I "$test_dir" -L "$test_dir" -lDockDoorWidgetSDK -Xlinker -rpath -Xlinker "$test_dir" Widgets/DotGlass/*.swift tests/dot-glass/ConnectionTests.swift -o "$test_dir/connection"
 "$test_dir/connection"
+swiftc -parse-as-library -target "${test_arch}-apple-macosx14.0" -I "$test_dir" -L "$test_dir" -lDockDoorWidgetSDK -Xlinker -rpath -Xlinker "$test_dir" Widgets/DotGlass/*.swift tests/dot-glass/ViewportTests.swift -o "$test_dir/viewport"
+"$test_dir/viewport"
 if [[ -d build/DotGlass.bundle ]]; then
   swiftc -parse-as-library -target "${test_arch}-apple-macosx14.0" -I "$test_dir" -L "$test_dir" -lDockDoorWidgetSDK -Xlinker -rpath -Xlinker "$test_dir" tests/dot-glass/BundleLoadTests.swift -o "$test_dir/bundle-loader"
   "$test_dir/bundle-loader" "$PWD/build/DotGlass.bundle"

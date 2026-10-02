@@ -60,3 +60,7 @@ A subsequent local diagnostic build adds WebRTC event-driven connection updates 
 The live diagnostic captured `call-unavailable` before WebRTC connected. The adapter now accepts explicit accessible call labels and title-only call controls outside message rows and the composer; disabled controls remain excluded. Fixtures cover these variants. Local universal build, native state checks, all adapter fixtures and actual bundle loading pass. Live verification remains pending.
 
 Call-control candidate 1cbfd0d is installed locally (ad-hoc signed for host testing). Its GitHub macOS 14 build and all regression checks passed: https://github.com/appleforever11/DotGlass-Marketplace/actions/runs/36958535418. Live call confirmation is still pending.
+
+## Responsive call-control correction
+
+The user screenshot of the signed-in embedded Dot page contains a working composer and conversation but no call control at the panel width. The page now uses public WKWebView.pageZoom to provide an approximately 1100 CSS-pixel conversation viewport while preserving the compact host panel and native glass UI. Authentication/non-conversation pages keep normal zoom. A real WebKit test using a local responsive fixture verifies that the control is hidden at 440px, visible after the production zoom calculation, and that sign-in scale restores to 1. This supports the layout correction but does not replace live authenticated voice verification.
