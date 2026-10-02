@@ -7,7 +7,7 @@ import WebKit
 @MainActor
 @Observable
 final class DotConnection: NSObject {
-    private let callLog = Logger(subsystem: "dot-glass", category: "Call")
+    @ObservationIgnored let callLog = Logger(subsystem: "dot-glass", category: "Call")
     var messages: [DotMessage] = []
     var name = "Your dot"
     var ready = false
@@ -26,6 +26,7 @@ final class DotConnection: NSObject {
     var voiceStarting = false
     private var voiceEnding = false
     private var voiceTimeout: Task<Void, Never>?
+    private var visiblePanels = Set<UUID>()
     var voiceConnected = false
     var voiceLevel = 0.0
     var voiceMeterAvailable = false
@@ -69,12 +70,14 @@ final class DotConnection: NSObject {
     @ObservationIgnored private var tickInFlight = false
     @ObservationIgnored private var lastTranscriptTick = Date.distantPast
 
-    /// Called only by the visible panel's TimelineView; no background polling timer.
+    /// Driven by visible panel/dock timelines. A hidden panel keeps voice sampling
+    /// only while a call is active; idle hidden sessions do no polling.
     func tick() {
+        guard !visiblePanels.isEmpty || voiceStarting || voiceConnected else { return }
         guard !tickInFlight, Date().timeIntervalSince(lastTick) >= 0.24,
               webView.url?.host == "chatgpt.com" else { return }
         let now = Date()
-        let refreshTranscript = now.timeIntervalSince(lastTranscriptTick) >= 1.5
+        let refreshTranscript = !visiblePanels.isEmpty && now.timeIntervalSince(lastTranscriptTick) >= 1.5
         guard refreshTranscript || voiceStarting || voiceConnected else { return }
         lastTick = now; tickInFlight = true
         if refreshTranscript { lastTranscriptTick = now }
@@ -300,9 +303,16 @@ final class DotConnection: NSObject {
         }
     }
 
-    func panelDisappeared() {
-        callLog.notice("Conversation panel disappeared")
-        stopAudio()
+    func panelAppeared(_ identity: UUID) {
+        visiblePanels.insert(identity)
+        callLog.notice("Conversation panel appeared")
+    }
+
+    func panelDisappeared(_ identity: UUID) {
+        visiblePanels.remove(identity)
+        // The plugin owns the call. DockDoor may dismiss its panel on focus
+        // changes; hiding presentation must never revoke active microphone use.
+        callLog.notice("Conversation panel hidden; active call retained")
     }
 
     func stopAudio() {

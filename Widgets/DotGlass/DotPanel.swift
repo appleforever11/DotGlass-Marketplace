@@ -5,6 +5,7 @@ struct DotPanel: View {
     @Bindable var connection: DotConnection
     var dismiss: () -> Void = {}
     @State private var selectedTheme = DotTheme.current
+    @State private var panelIdentity = UUID()
     @State private var showDotPicker = false
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -37,7 +38,8 @@ struct DotPanel: View {
             }.allowsHitTesting(false).accessibilityHidden(true)
         }
         .task { connection.connect() }
-        .onDisappear { connection.panelDisappeared() }
+        .onAppear { connection.panelAppeared(panelIdentity) }
+        .onDisappear { connection.panelDisappeared(panelIdentity) }
     }
 
     private var header: some View {
@@ -81,7 +83,7 @@ struct DotPanel: View {
                     .background(.black.opacity(0.22), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.8))
             }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Dot Glass options").accessibilityLabel("Dot Glass options")
-            DotIconButton(title: "Close panel", symbol: "xmark", action: dismiss)
+            DotIconButton(title: "Hide panel", symbol: "xmark", action: dismiss)
         }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
     }
 

@@ -56,7 +56,8 @@ extension DotConnection: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        guard voiceStarting, frame.isMainFrame, origin.protocol == "https", origin.host == "chatgpt.com", type == .microphone,
+        callLog.notice("WebKit requested capture: starting=\(self.voiceStarting) mainFrame=\(frame.isMainFrame) microphone=\(type == .microphone)")
+        guard voiceStarting, frame.isMainFrame, origin.protocol == "https", origin.host == "chatgpt.com", [0, 443].contains(origin.port), type == .microphone,
               Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else {
             notice = "This host cannot start a voice call. Open the conversation in your browser for calls."
             decisionHandler(.deny); return

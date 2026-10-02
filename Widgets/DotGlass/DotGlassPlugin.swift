@@ -13,8 +13,10 @@ final class DotGlassPlugin: WidgetPlugin, DockDoorWidgetProvider {
         [.picker(key: "theme", label: "Orb glow", options: DotTheme.allCases.map(\.rawValue), defaultValue: "Arctic")]
     }
     @MainActor func makeBody(size: CGSize, isVertical: Bool) -> AnyView {
-        AnyView(TimelineView(.periodic(from: .now, by: 1)) { _ in
-            DotCompact(size: size, vertical: isVertical, connection: self.connection).environment(\.dotTheme, DotTheme.current)
+        AnyView(TimelineView(.periodic(from: .now, by: connection.voiceStarting || connection.voiceConnected ? 0.25 : 1)) { timeline in
+            DotCompact(size: size, vertical: isVertical, connection: self.connection)
+                .environment(\.dotTheme, DotTheme.current)
+                .onChange(of: timeline.date) { _, _ in self.connection.tick() }
         })
     }
     @MainActor func makePanelBody(dismiss: @escaping () -> Void) -> AnyView? { AnyView(DotPanel(connection: connection, dismiss: dismiss).frame(width: 440, height: 640)) }

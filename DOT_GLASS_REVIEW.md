@@ -14,7 +14,7 @@ Review candidate with a live call blocker, not an approved marketplace release. 
 - Standard WKWebView persistent data store manages sign-in. Widget does not read cookies, keychain, credentials or bearer tokens.
 - Chat bridge uses rendered page elements and existing Send/Start call controls, with origin, room, duplicate-send and acknowledgment guards. No private network endpoint calls.
 - Audio meter uses standard inbound WebRTC getStats. No recording, outbound audio inspection or synthetic speech. Microphone request is gated to a user-started call and the top-level ChatGPT origin.
-- Native visible-panel TimelineView drives polling; no long-lived JavaScript interval. Ring respects Reduce Motion and visibility.
+- Native visible-panel/dock TimelineView drives polling; a hidden panel samples voice only during a user-started call. Idle hidden sessions do not poll; no long-lived JavaScript interval. Ring respects Reduce Motion and visibility.
 - Semantic panel fonts. English labels only.
 - Approved artwork: opaque sRGB PNG, 1080x608, 757254 bytes; no text or UI chrome. Separate promotional hero is not in the widget folder.
 
@@ -64,3 +64,7 @@ Call-control candidate 1cbfd0d is installed locally (ad-hoc signed for host test
 ## Responsive call-control correction
 
 The user screenshot of the signed-in embedded Dot page contains a working composer and conversation but no call control at the panel width. The page now uses public WKWebView.pageZoom to provide an approximately 1100 CSS-pixel conversation viewport while preserving the compact host panel and native glass UI. Authentication/non-conversation pages keep normal zoom. A real WebKit test using a local responsive fixture verifies that the control is hidden at 440px, visible after the production zoom calculation, and that sign-in scale restores to 1. This supports the layout correction but does not replace live authenticated voice verification.
+
+## Call lifetime correction
+
+The user confirmed DockDoor dismisses the panel during ringing and explicitly requested that calls continue after dismissal. Logs matched: panel disappearance invoked stopAudio while voiceStarting was true. The panel now registers visibility without stopping the plugin-owned call; the visible dock timeline samples active voice while the panel is hidden. Hiding the panel no longer resets WebKit capture, pauses playback or reloads the room. End call still performs those teardown actions. The tour explains this behavior. Native tests cover dismissal during both connection and an active call; a fresh live check is pending.

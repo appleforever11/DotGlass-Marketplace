@@ -35,6 +35,17 @@ struct ConnectionChecks {
         connection.receive(snapshot(room, acknowledgement: "pending-fixture"))
         precondition(connection.pendingToken == nil)
         connection.voiceConnected = true
+        let panel = UUID()
+        connection.panelAppeared(panel)
+        connection.panelDisappeared(panel)
+        precondition(connection.voiceConnected, "Hiding the panel must retain an active call")
+        connection.voiceConnected = false
+        connection.voiceStarting = true
+        connection.panelAppeared(panel)
+        connection.panelDisappeared(panel)
+        precondition(connection.voiceStarting, "Auto-dismiss must not cancel call setup")
+        connection.voiceStarting = false
+        connection.voiceConnected = true
         connection.reload()
         precondition(connection.voiceConnected && connection.notice == "End your call before reconnecting.")
         connection.voiceConnected = false

@@ -9,7 +9,7 @@ struct DotTour: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var palette: [Color] { (DotTheme(rawValue: themeName) ?? .arctic).colors }
     private let titles = ["Your Dot. A little closer.", "Talk naturally.", "Make it yours."]
-    private let details = ["Send a message at the bottom of the panel. Your real Dot replies here, with your conversation kept together.", "Use the phone button to start a real Dot call. The ring responds to Dot’s voice. Use End call when you’re finished.", "Choose one of six colors in DockDoor’s widget settings under Orb glow. Your ring and chat bubbles follow your theme."]
+    private let details = ["Send a message at the bottom of the panel. Your real Dot replies here, with your conversation kept together.", "Use the phone button to start a real Dot call. The ring responds to Dot’s voice. Calls continue when the panel hides. Reopen it and use End call when you’re finished.", "Choose one of six colors in DockDoor’s widget settings under Orb glow. Your ring and chat bubbles follow your theme."]
     var body: some View {
         VStack(spacing: 16) {
             Spacer(minLength: 8)
