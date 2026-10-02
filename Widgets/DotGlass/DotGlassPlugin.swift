@@ -1,6 +1,7 @@
 import DockDoorWidgetSDK
 import SwiftUI
 
+@objc(DotGlassPlugin)
 final class DotGlassPlugin: WidgetPlugin, DockDoorWidgetProvider {
     @MainActor private lazy var connection = DotConnection()
     var id: String { "dot-glass" }

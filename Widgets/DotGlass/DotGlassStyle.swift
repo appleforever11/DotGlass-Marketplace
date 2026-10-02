@@ -5,10 +5,17 @@ struct DotGlassSurface: ViewModifier {
     func body(content: Content) -> some View {
         if reduced {
             content.background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 28))
-        } else if #available(macOS 26.0, *) {
-            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         } else {
+            // Marketplace CI also builds with SDKs predating Liquid Glass.
+            #if compiler(>=6.2)
+            if #available(macOS 26.0, *) {
+                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            } else {
+                content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            }
+            #else
             content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            #endif
         }
     }
 }

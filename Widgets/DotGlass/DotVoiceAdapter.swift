@@ -25,7 +25,7 @@ enum DotVoiceAdapter {
         try {
           for (const peer of peers) {
             if (peer.connectionState !== 'connected') continue;
-            if (!peer.getSenders().some(s => s.track?.kind === 'audio' && s.track.readyState === 'live' && s.track.enabled)) continue;
+            if (!peer.getSenders().some(s => s.track?.kind === 'audio' && s.track.readyState === 'live')) continue;
             const receivers = peer.getReceivers().filter(r => r.track?.kind === 'audio' && r.track.readyState === 'live');
             if (!receivers.length) continue;
             connected = true;

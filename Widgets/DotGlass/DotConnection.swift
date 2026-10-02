@@ -65,13 +65,18 @@ final class DotConnection: NSObject {
 
     @ObservationIgnored private var lastTick = Date.distantPast
     @ObservationIgnored private var tickInFlight = false
+    @ObservationIgnored private var lastTranscriptTick = Date.distantPast
 
     /// Called only by the visible panel's TimelineView; no background polling timer.
     func tick() {
         guard !tickInFlight, Date().timeIntervalSince(lastTick) >= 0.24,
               webView.url?.host == "chatgpt.com" else { return }
-        lastTick = Date(); tickInFlight = true
-        webView.callAsyncJavaScript("window.__dotGlass?.refresh(); await window.__dotGlassVoice?.sample();", arguments: [:], in: nil, in: .page) { [weak self] _ in
+        let now = Date()
+        let refreshTranscript = now.timeIntervalSince(lastTranscriptTick) >= 1.5
+        guard refreshTranscript || voiceStarting || voiceConnected else { return }
+        lastTick = now; tickInFlight = true
+        if refreshTranscript { lastTranscriptTick = now }
+        webView.callAsyncJavaScript("if (refreshTranscript) window.__dotGlass?.refresh(); await window.__dotGlassVoice?.sample();", arguments: ["refreshTranscript": refreshTranscript], in: nil, in: .page) { [weak self] _ in
             Task { @MainActor in self?.tickInFlight = false }
         }
     }
@@ -120,6 +125,7 @@ final class DotConnection: NSObject {
     }
 
     func cancelSetup() {
+        stopAudio()
         requestedSignIn = false; completingSetup = false
         webView.stopLoading(); loading = false; showConnection = false; needsSetup = true
     }
@@ -134,6 +140,10 @@ final class DotConnection: NSObject {
     }
 
     func reload() {
+        guard !voiceStarting && !voiceConnected else {
+            notice = "End your call before reconnecting."
+            return
+        }
         if webView.url == nil { beginSetup(); return }
         guard pendingToken == nil else {
             notice = "Check the conversation before reconnecting; your last message may have been sent."
@@ -192,9 +202,12 @@ final class DotConnection: NSObject {
             if !needsSetup && !showTour { showConnection = true; openSignInIfNeeded() }
             return
         }
-        defaults.set(incoming, forKey: "dot-glass.conversationURL")
+        if defaults.string(forKey: "dot-glass.conversationURL") != incoming {
+            defaults.set(incoming, forKey: "dot-glass.conversationURL")
+        }
+        let previousProfiles = directory.profiles
         directory.remember(url: incoming, name: snapshot.name)
-        saveDirectory()
+        if directory.profiles != previousProfiles { saveDirectory() }
         name = directory.profiles.first(where: { $0.url == incoming })?.name ?? String(snapshot.name.prefix(80))
         ready = snapshot.ready; loading = false
         if ready && completingSetup {
@@ -252,6 +265,10 @@ final class DotConnection: NSObject {
 
     func openBrowser() { NSWorkspace.shared.open(DotURLPolicy.conversation(conversation) ?? DotURLPolicy.home) }
     func startCall() {
+        guard ready, !loading, pendingToken == nil else {
+            notice = "Finish connecting your Dot and any pending message before calling."
+            return
+        }
         guard !voiceStarting, !voiceConnected else { return }
         voiceEnding = false; voiceStarting = true; notice = nil
         webView.callAsyncJavaScript("return window.__dotGlass?.startCall(room) ?? 'not-ready';",
@@ -307,6 +324,7 @@ final class DotScriptHandler: NSObject, WKScriptMessageHandler {
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https",
               message.frameInfo.securityOrigin.host == "chatgpt.com",
+              [0, 443].contains(message.frameInfo.securityOrigin.port),
               JSONSerialization.isValidJSONObject(message.body),
               let data = try? JSONSerialization.data(withJSONObject: message.body), data.count <= 4_000_000 else { return }
         if let voice = try? JSONDecoder().decode(DotVoiceSnapshot.self, from: data) {
