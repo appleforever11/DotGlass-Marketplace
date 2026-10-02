@@ -37,7 +37,7 @@ struct DotPanel: View {
             }.allowsHitTesting(false).accessibilityHidden(true)
         }
         .task { connection.connect() }
-        .onDisappear { connection.stopAudio() }
+        .onDisappear { connection.panelDisappeared() }
     }
 
     private var header: some View {

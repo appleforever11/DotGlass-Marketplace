@@ -32,6 +32,12 @@ test('rendered messages, guarded sends, duplicate suppression and acknowledgemen
    const call=document.createElement('button');call.setAttribute('aria-label','Start call');document.body.append(call);let calls=0;call.onclick=()=>calls++;
    check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='started','start real control');
    check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='pending' && calls===1,'prevent duplicate call');
+   __dotGlass.resetCall();call.setAttribute('aria-label','Start voice call');
+   check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='started','alternate accessible call label');
+   __dotGlass.resetCall();call.disabled=true;
+   check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='call-unavailable','disabled call is unavailable');
+   call.disabled=false;call.removeAttribute('aria-label');call.setAttribute('title','Call');
+   check(__dotGlass.startCall('https://chatgpt.com/dots/test-room')==='started','title-only call control');
    check(__dotGlass.openSignIn()===false,'no invented sign-in control');
    const login=document.createElement('button');login.textContent='Log in';document.body.append(login);let logins=0;login.onclick=()=>logins++;
    check(__dotGlass.openSignIn()===true,'open visible login');__dotGlass.openSignIn();check(logins===1,'sign-in clicks only once');
@@ -62,7 +68,8 @@ test('voice meter observes only inbound audio and stops after disconnect', async
   muted=false;
   getSenders(){return this.microphone ? [{track:{kind:'audio',readyState:'live',enabled:!this.muted}}] : []}
   getReceivers(){return [{track:{kind:'audio',readyState:'live'}}]}
-  addEventListener(){}
+  events={};
+  addEventListener(name, callback){this.events[name]=callback}
   async getStats(){return new Map([
    ['out',{id:'out',type:'outbound-rtp',kind:'audio',audioLevel:1}],
    ['in',{id:'in',type:'inbound-rtp',kind:'audio',audioLevel:0.04}]
@@ -75,5 +82,7 @@ test('voice meter observes only inbound audio and stops after disconnect', async
  assert.equal(received.at(-1).meterAvailable,true);
  peer.muted=true;await window.__dotGlassVoice.sample();assert.equal(received.at(-1).connected,true,'muting does not end the call');
  peer.microphone=false;await window.__dotGlassVoice.sample();assert.equal(received.at(-1).connected,false);
- peer.microphone=true;peer.connectionState='closed';await window.__dotGlassVoice.sample();assert.equal(received.at(-1).connected,false);assert.equal(received.at(-1).level,0);
+ peer.microphone=true;peer.connectionState='connected';peer.events.track();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(received.at(-1).connected,true,'track events publish without a polling tick');
+ peer.connectionState='closed';peer.events.connectionstatechange();await new Promise(resolve=>setImmediate(resolve));assert.equal(received.at(-1).connected,false);assert.equal(received.at(-1).level,0);
 });

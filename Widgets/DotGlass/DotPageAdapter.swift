@@ -88,8 +88,17 @@ enum DotPageAdapter {
       const startCall = expectedRoom => {
         if (!room() || room() !== expectedRoom) return 'not-ready';
         if (callRequested) return 'pending';
-        const button = Array.from(document.querySelectorAll('button[aria-label="Start call"], [role="button"][aria-label="Start call"]')).find(visible);
-        if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true') return 'call-unavailable';
+        // ChatGPT varies the accessible name with viewport and call UI versions.
+        // Match explicit call actions only, outside messages and the composer.
+        const labels = new Set(['start call', 'start a call', 'call', 'voice call', 'start voice call', 'start a voice call', 'call your dot']);
+        const dotName = snapshot().name.toLowerCase();
+        if (dotName && dotName !== 'your dot') labels.add('call ' + dotName);
+        const button = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
+          if (!visible(el) || el.closest('.message-row, .composer-wrap') || el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+          return [el.getAttribute('aria-label'), el.getAttribute('title'), el.innerText]
+            .some(label => label && labels.has(normalize(label).toLowerCase()));
+        });
+        if (!button) return 'call-unavailable';
         callRequested = true;
         button.click();
         return 'started';

@@ -1,11 +1,13 @@
 import AppKit
 import Observation
+import OSLog
 import WebKit
 
 /// One owned web session per plugin. Messages are held in memory, never logged.
 @MainActor
 @Observable
 final class DotConnection: NSObject {
+    private let callLog = Logger(subsystem: "dot-glass", category: "Call")
     var messages: [DotMessage] = []
     var name = "Your dot"
     var ready = false
@@ -270,27 +272,41 @@ final class DotConnection: NSObject {
             return
         }
         guard !voiceStarting, !voiceConnected else { return }
-        voiceEnding = false; voiceStarting = true; notice = nil
+        callLog.notice("Call requested")
+        voiceEnding = false; voiceStarting = true; showConnection = false; notice = nil
         webView.callAsyncJavaScript("return window.__dotGlass?.startCall(room) ?? 'not-ready';",
             arguments: ["room": conversation], in: nil, in: .page) { [weak self] result in
             Task { @MainActor in
                 guard let self, self.voiceStarting else { return }
                 guard case .success(let value) = result, value as? String == "started" else {
-                    self.voiceStarting = false; self.showConnection = true
-                    self.notice = "Open ChatGPT’s call controls to continue."
+                    self.voiceStarting = false
+                    if case .success(let value) = result, let status = value as? String,
+                       ["not-ready", "pending", "call-unavailable"].contains(status) {
+                        self.callLog.notice("Call control status: \(status, privacy: .public)")
+                    } else if case .failure(let error) = result {
+                        self.callLog.notice("Call script error code: \((error as NSError).code)")
+                    } else { self.callLog.notice("Unexpected call control result") }
+                    self.notice = "The call couldn’t start. Reconnect your Dot, then try again."
                     return
                 }
                 self.voiceTimeout = Task { [weak self] in
                     try? await Task.sleep(for: .seconds(20))
                     guard !Task.isCancelled, let self, self.voiceStarting else { return }
-                    self.voiceStarting = false; self.showConnection = true
-                    self.notice = "Check ChatGPT’s call controls to finish connecting."
+                    self.callLog.notice("Call connection timed out")
+                    self.stopAudio()
+                    self.notice = "The call didn’t connect. Check microphone access and try again."
                 }
             }
         }
     }
 
+    func panelDisappeared() {
+        callLog.notice("Conversation panel disappeared")
+        stopAudio()
+    }
+
     func stopAudio() {
+        callLog.notice("Stopping call: starting=\(self.voiceStarting) connected=\(self.voiceConnected)")
         voiceEnding = true
         let wasStarting = voiceStarting
         voiceTimeout?.cancel(); voiceStarting = false
@@ -301,6 +317,7 @@ final class DotConnection: NSObject {
         voiceConnected = false; voiceLevel = 0
     }
     func receiveVoice(_ value: DotVoiceSnapshot) {
+        if value.connected != voiceConnected { callLog.notice("WebRTC connection changed: \(value.connected)") }
         if voiceEnding {
             if !value.connected { voiceEnding = false }
             return

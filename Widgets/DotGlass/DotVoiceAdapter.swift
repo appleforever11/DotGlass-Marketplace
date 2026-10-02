@@ -13,7 +13,9 @@ enum DotVoiceAdapter {
           super(...args); peers.add(this);
           this.addEventListener('connectionstatechange', () => {
             if (this.connectionState === 'closed' || this.connectionState === 'failed') peers.delete(this);
+            sample();
           });
+          this.addEventListener('track', () => sample());
         }
       }
       window.RTCPeerConnection = MeteredPeer;
