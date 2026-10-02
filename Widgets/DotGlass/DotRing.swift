@@ -57,8 +57,8 @@ private struct RingContour: Shape {
         for index in 0...120 {
             let angle = Double(index) / 120 * .pi * 2
             let ripple = energy * (sin(angle * 3 + time * 7) * 0.045 + sin(angle * 5 - time * 5) * 0.018)
-            let r = radius * (1 + ripple)
-            let point = CGPoint(x: rect.midX + cos(angle) * r, y: rect.midY + sin(angle) * r)
+            let r = radius * CGFloat(1 + ripple)
+            let point = CGPoint(x: rect.midX + CGFloat(cos(angle)) * r, y: rect.midY + CGFloat(sin(angle)) * r)
             if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
         }
         path.closeSubpath()
