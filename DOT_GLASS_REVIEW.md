@@ -1,78 +1,55 @@
-# Dot Glass marketplace review
+# Dot Glass marketplace review candidate
 
-Review candidate with a live call blocker, not an approved marketplace release. Based on upstream commit 11d38623d7d30071a74003042ab0aed06ff61056.
+Ready for maintainer review; not an approved or published marketplace release.
 
-## Boundaries checked
+## Candidate and validation
 
-- Independent `dot-glass` identity; personal build is `dot-glass-personal`. No Codex Tracker imports, helper or data source.
-- Only widget.json, listed Swift files and approved preview.png in Widgets/DotGlass.
-- Metadata matches provider; author appleforever11. Both orientations render a centered ring at compact and extended sizes.
-- Uses host WidgetMetrics; dock root has no frame. Host owns panel creation; no custom NSWindow/NSPanel.
-- Plugin owns an @Observable connection; views use @Bindable. No singleton ObservableObject.
-- Theme read via WidgetDefaults. Appearance customization belongs to host settingsSchema, not custom settings writes.
-- Runtime preferences use dot-glass.*. No migration code, app config writes, file installers, subprocesses, private API, global event monitoring or updater.
-- Standard WKWebView persistent data store manages sign-in. Widget does not read cookies, keychain, credentials or bearer tokens.
-- Chat bridge uses rendered page elements and existing Send/Start call controls, with origin, room, duplicate-send and acknowledgment guards. No private network endpoint calls.
-- Audio meter uses standard inbound WebRTC getStats. No recording, outbound audio inspection or synthetic speech. Microphone request is gated to a user-started call and the top-level ChatGPT origin.
-- Native visible-panel/dock TimelineView drives polling; a hidden panel samples voice only during a user-started call. Idle hidden sessions do not poll; no long-lived JavaScript interval. Ring respects Reduce Motion and visibility.
-- Semantic panel fonts. English labels only.
-- Approved artwork: opaque sRGB PNG, 1080x608, 757254 bytes; no text or UI chrome. Separate promotional hero is not in the widget folder.
+- Widget source: `6d2191b` on `codex/dot-glass-review` in https://github.com/appleforever11/DotGlass-Marketplace
+- Upstream base: `11d38623d7d30071a74003042ab0aed06ff61056`.
+- Exact upstream builder produced the universal arm64/x86_64 bundle. Distribution archive is unchanged and unsigned, as produced by that builder; the installed local test copy is ad-hoc signed.
+- GitHub macOS 14 / Xcode 15.4 / Swift 5.10 build and regression suite passed: https://github.com/appleforever11/DotGlass-Marketplace/actions/runs/36960627997
+- Local universal build and the same suite passed. Checks cover URL/origin policy, rendered message/send/acknowledgment behavior, duplicate prevention, inbound-only audio metering, muted calls, microphone controls, native connection state, actual WebKit responsive layout, and Bundle.principalClass loading against the SDK. All 11 widget folders pass the upstream validator.
+- DockDoor settings and its preview were inspected live: plugin discovery, ring rendering, all six theme choices, and Rose-to-Aurora color propagation. The user's chosen theme and dock profiles were preserved.
+- The user verified real two-way Dot voice, continuation while the panel is hidden, and mute/unmute in the installed candidate. Runtime events corroborate microphone capture, WebRTC connection, inbound audio and explicit call teardown. User confirmation supplies the audible/interactive proof; logs alone do not.
+- The native muted warning and microphone button were visually inspected in a clearly labeled example preview. Existing conversation and tour screenshots are examples, not recordings of a live call or private user messages.
 
-## Maintainer review questions / remaining validation
+## Product behavior
 
-The embedded authenticated ChatGPT web session and rendered-page adapter are a new integration for this submission. Passing lint does not establish that the maintainer accepts this approach. Explicitly disclose WebKit's own persistent website storage and the native/JavaScript bridge; do not hide these behind a claim of read-only behavior.
+Dot Glass provides a compact animated dock ring and a host-owned glass conversation panel. Six host-managed themes color the ring and Dot's message bubbles; outgoing messages remain grey with a subtle theme tint. Text uses the signed-in Dot conversation. Calls use ChatGPT's own call control and actual Dot voice, with native mute/unmute and End call controls.
 
-Real Dot messages and bidirectional voice were user-verified in the original personal prototype. Marketplace source now has different state ownership and polling. The exact upstream-built candidate now loads in DockDoor: plugin registration, the ring, and the host Orb glow setting were verified. Changing Rose to Aurora visibly changed the live preview to green/cyan; Rose was restored. Fresh sign-in, message send/reply, call start/voice/end, and close/reopen still require a live authenticated DockDoor test. The floating conversation panel is not exposed by the automation tool; the user-assisted check reported a call that connects briefly, then drops, sometimes showing the web interface. Submission is blocked until this is fixed and re-tested. No claim of marketplace approval or release should precede that test.
+A call belongs to the plugin session and continues when DockDoor auto-dismisses the panel. Reopen the panel to mute, unmute or end it. Microphone mute state is visible; the widget never silently unmutes. Idle hidden sessions do not poll. A visible dock timeline samples active voice while the panel is hidden; WebRTC events also report connection transitions. No long-lived JavaScript interval or background helper is installed.
 
-ChatGPT account access to Dots and host microphone permission are required. This is a third-party UI integration, not an official OpenAI API or endorsement; site changes may require adapter updates. Voice calls are with the AI Dot, not telephone/PSTN calls.
+The embedded Dot page uses a desktop-sized WebKit frame scaled into the compact panel so its call control remains available. WebKit pageZoom stays at 1 to preserve virtualized message measurements. Sign-in pages retain normal scale. The native glass conversation is the primary interface.
 
-## Review package
+## Marketplace boundaries
 
-Source repo: https://github.com/appleforever11/DotGlass-Marketplace
-Personal source/feed: https://github.com/appleforever11/DotGlass-Private
-No upstream PR or marketplace deployment has been sent. Actions are enabled for the manual, read-only Dot Glass Review Checks workflow. The review branch does not trigger the inherited main-branch release workflow; no deployment workflow has been dispatched.
+- Independent `dot-glass` identity; the personal variant is `dot-glass-personal`. No Codex Tracker imports, helper or data source.
+- `Widgets/DotGlass` contains only widget.json, its explicitly listed Swift files and approved preview.png.
+- Provider metadata and manifest match. Both dock orientations support compact and extended slots using WidgetMetrics; dock root has no fixed frame.
+- DockDoor owns panel presentation. No custom NSWindow/NSPanel, subprocess, installer, agent, updater, private API or global event monitor in widget source.
+- Plugin owns its @Observable connection; views use @Bindable. No singleton ObservableObject.
+- Appearance is read through WidgetDefaults and declared by settingsSchema. No direct appearance-setting writes; runtime preferences are namespaced `dot-glass.*`. No migration or other-app configuration writes.
+- Standard persistent WKWebView website storage manages sign-in. The widget does not read cookies, tokens, credentials or keychain contents.
+- The JavaScript bridge reads rendered page elements and operates existing Send, Call and Mute controls. Origin, room, duplicate-send and acknowledgment guards apply. No private network endpoints are called.
+- Audio metering uses public inbound WebRTC getStats only. Microphone audio is not inspected, recorded or logged; no synthesized replacement voice.
+- Microphone permission requests are restricted to the main ChatGPT origin during a user-started call. Call diagnostic logging contains fixed events and state booleans only, never account, message, room, credential or audio content.
+- English labels, semantic panel fonts and Reduce Motion support.
+- Approved preview: opaque sRGB PNG, 1080x608, 757254 bytes; no text/UI. Promotional hero remains outside the widget folder.
 
-## Prior maintainer decisions consulted
+## Review limits and maintainer checks
 
-- PR #20 review: no writes to another application's config, no background-agent workaround, never reuse Tracker's ID for a new product, and no auxiliary files in a widget folder. https://github.com/ejbills/dockdoorpro-widgets/pull/20
-- PR #21 maintainer follow-up: use native host settings instead of panel writes; report absent data honestly. https://github.com/ejbills/dockdoorpro-widgets/pull/21
-- Current CONTRIBUTING.md and scripts/widget_rules.py are the authority for this candidate. Lint passing is explicitly not developer approval.
+This is a third-party rendered-page integration, not an official OpenAI API or endorsement. It requires an account with Dot access and microphone permission. ChatGPT UI changes may require adapter updates. Calls are conversations with the AI Dot, not telephone/PSTN calls. The integration cannot create additional Dots; its selector remembers valid conversations encountered in ChatGPT.
 
-## Latest local checks
+Live voice was checked with the user's existing authenticated session. Fresh-account sign-in, provider-specific authentication, and microphone permission onboarding should also be checked on the maintainer's account; no user session was erased to simulate a first install. Historical prototype sign-in is not represented as fresh-account validation of this final candidate.
 
-Universal build passed, current upstream validator passed all 11 folders, URL/origin policy test passed, and all three adapter tests passed (rendered send/acknowledgment, origin rejection, inbound-only voice meter). Native review preview inspected on the conversation and voice-tour screens. Screenshots use clearly labeled example messages, not a live call and not the user's personal conversation.
+The authenticated WebKit session and native/page bridge are explicitly disclosed for maintainer acceptance. Passing builds and lint does not guarantee approval. No upstream PR, marketplace deployment, GitHub release or Discord post has been sent. The manual read-only review workflow is enabled on the review repository; no deployment workflow has been dispatched.
 
-The personal Sparkle companion reached the published empty feed and displayed “You're up to date.” This verifies feed loading only. No full update/install cycle, Developer ID notarization or signed production archive has been completed.
+## Prior maintainer decisions applied
 
-## Marketplace hardening on October 1
+- PR #20: no other-app config writes or background-agent workaround, separate identity from Tracker, no auxiliary widget-folder files: https://github.com/ejbills/dockdoorpro-widgets/pull/20
+- PR #21: native host settings and honest absent-data reporting: https://github.com/ejbills/dockdoorpro-widgets/pull/21
+- Current CONTRIBUTING.md and scripts/widget_rules.py remain authoritative.
 
-- Fixed plugin discovery by exporting the Objective-C principal-class name expected by the unchanged upstream builder. Added a real Bundle.principalClass loading test against the built bundle and SDK.
-- A muted microphone no longer looks like an ended call. Inbound audio alone drives the voice meter.
-- Bounded transcript polling, blocked reconnect during a call, retained ambiguous message delivery, and rejected nonstandard bridge origin ports.
-- Added native connection-state tests and regression tests for muted calls.
-- Explicit UI actor isolation and numeric geometry conversions support the older marketplace compiler. Liquid Glass is compiler-gated with a material fallback for older SDKs.
-- The universal build, all regression tests and actual bundle-loading test passed on GitHub macOS 14 / Xcode 15.4 / Swift 5.10: https://github.com/appleforever11/DotGlass-Marketplace/actions/runs/36957520706 (commit 06ecff1).
+## Personal build is separate
 
-## Live call investigation
-
-A subsequent local diagnostic build adds WebRTC event-driven connection updates and removes automatic web-view fallback on call start failure/timeout. It logs only call lifecycle booleans and fixed event descriptions through OSLog, never messages, room URLs, credentials, audio or transcript content. Its build and regression checks pass locally; a fresh user-assisted call test is pending. This is not yet a final release artifact.
-
-The live diagnostic captured `call-unavailable` before WebRTC connected. The adapter now accepts explicit accessible call labels and title-only call controls outside message rows and the composer; disabled controls remain excluded. Fixtures cover these variants. Local universal build, native state checks, all adapter fixtures and actual bundle loading pass. Live verification remains pending.
-
-Call-control candidate 1cbfd0d is installed locally (ad-hoc signed for host testing). Its GitHub macOS 14 build and all regression checks passed: https://github.com/appleforever11/DotGlass-Marketplace/actions/runs/36958535418. Live call confirmation is still pending.
-
-## Responsive call-control correction
-
-The user screenshot of the signed-in embedded Dot page contains a working composer and conversation but no call control at the panel width. The page now uses public WKWebView.pageZoom to provide an approximately 1100 CSS-pixel conversation viewport while preserving the compact host panel and native glass UI. Authentication/non-conversation pages keep normal zoom. A real WebKit test using a local responsive fixture verifies that the control is hidden at 440px, visible after the production zoom calculation, and that sign-in scale restores to 1. This supports the layout correction but does not replace live authenticated voice verification.
-
-## Call lifetime correction
-
-The user confirmed DockDoor dismisses the panel during ringing and explicitly requested that calls continue after dismissal. Logs matched: panel disappearance invoked stopAudio while voiceStarting was true. The panel now registers visibility without stopping the plugin-owned call; the visible dock timeline samples active voice while the panel is hidden. Hiding the panel no longer resets WebKit capture, pauses playback or reloads the room. End call still performs those teardown actions. The tour explains this behavior. Native tests cover dismissal during both connection and an active call; a fresh live check is pending.
-
-Live outcome for fd59888: the user reports ringing continues when the panel hides but no Dot voice connection. OSLog confirms the microphone request and a WebRTC connected event after panel dismissal; this is transport evidence only, not a successful two-way Dot call. Submission remains blocked pending the visible ChatGPT call state and audio diagnosis. Hosted macOS 14 build, regression suite and bundle loading passed: https://github.com/appleforever11/DotGlass-Marketplace/actions/runs/36959845986.
-
-## Microphone visibility and rendered layout
-
-The user confirmed ChatGPT was muted; their screenshot showed an active timed call. Native controls now expose an explicit Mute/Unmute action and a visible muted warning, reading sender track enabled state without inspecting microphone audio. Actions click the matching rendered ChatGPT control and never automatically unmute. Fixtures cover room guards, idempotent unmute, mute status and enabled-state changes. The labeled native preview was visually inspected with its warning and microphone control.
-
-The pageZoom approach exposed the call button but broke ChatGPT virtualized message heights. It is replaced by a real wider WebKit frame rendered into the compact panel with SwiftUI scaling; WebKit pageZoom remains 1. The actual-WebKit responsive fixture passes. Local universal build, all regression checks and principal-class loading pass. The latest candidate is installed locally, but live two-way voice and the new microphone control still need confirmation before submission.
+The personal repository and Sparkle feed are separate from this marketplace candidate: https://github.com/appleforever11/DotGlass-Private . Its empty feed was tested previously; a notarized production update/install cycle is not part of this marketplace validation. These marketplace fixes have not been represented as parity with the personal variant.
