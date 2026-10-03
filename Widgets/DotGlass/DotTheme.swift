@@ -37,23 +37,31 @@ enum DotTheme: String, CaseIterable {
 struct DotBubbleSurface: ViewModifier {
     let isMine: Bool
     @Environment(\.dotTheme) private var selectedTheme
+    @Environment(\.dotGlassOpacity) private var glassOpacity
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     private var themeName: String { selectedTheme.rawValue }
     private var theme: DotTheme { DotTheme(rawValue: themeName) ?? .arctic }
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 19, style: .continuous)
+        let tint = isMine ? Color(red: 0.24, green: 0.25, blue: 0.28) : theme.messageColor
+        let opacity = min(1, max(0.2, glassOpacity))
         content
             .foregroundStyle(.white.opacity(0.96))
             .background {
-                RoundedRectangle(cornerRadius: 19, style: .continuous)
-                    .fill(isMine ? Color(red: 0.24, green: 0.25, blue: 0.28) : theme.messageColor)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 19, style: .continuous)
-                            .fill(LinearGradient(colors: [theme.colors[2].opacity(isMine ? 0.09 : 0.10), .clear],
-                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
-                    }
+                if reduceTransparency {
+                    shape.fill(tint)
+                } else {
+                    shape.fill(.ultraThinMaterial)
+                        .overlay { shape.fill(tint.opacity(isMine ? 0.36 : 0.54)) }
+                        .overlay {
+                            shape.fill(LinearGradient(colors: [theme.colors[2].opacity(0.12), .clear],
+                                                      startPoint: .topLeading, endPoint: .bottomTrailing))
+                        }
+                        .opacity(opacity)
+                }
             }
-            .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous)
-                .strokeBorder(theme.colors[2].opacity(isMine ? 0.15 : 0.25), lineWidth: 0.7))
+            .overlay(shape.strokeBorder(theme.colors[2].opacity((isMine ? 0.17 : 0.28) * opacity), lineWidth: 0.7))
     }
 }
 
@@ -66,4 +74,13 @@ extension EnvironmentValues {
         get { self[DotThemeKey.self] }
         set { self[DotThemeKey.self] = newValue }
     }
+
+    var dotGlassOpacity: Double {
+        get { self[DotGlassOpacityKey.self] }
+        set { self[DotGlassOpacityKey.self] = newValue }
+    }
+}
+
+private struct DotGlassOpacityKey: EnvironmentKey {
+    static let defaultValue = 0.68
 }

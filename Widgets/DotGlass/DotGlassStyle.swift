@@ -2,21 +2,32 @@ import SwiftUI
 
 struct DotGlassSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduced
+    var opacity: Double = 0.68
+
+    private var level: Double { min(1, max(0.2, opacity)) }
+
     func body(content: Content) -> some View {
         if reduced {
             content.background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 28))
         } else {
-            // Marketplace CI also builds with SDKs predating Liquid Glass.
-            #if compiler(>=6.2)
-            if #available(macOS 26.0, *) {
-                content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-            } else {
-                content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-            }
-            #else
-            content.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-            #endif
+            content.background { glassSurface.opacity(level) }
         }
+    }
+
+    @ViewBuilder
+    private var glassSurface: some View {
+        let shape = RoundedRectangle(cornerRadius: 28, style: .continuous)
+        // Keep glass on its own backdrop layer so the opacity control never fades text or controls.
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            shape.fill(.clear)
+                .glassEffect(.regular.tint(Color.primary.opacity(0.1)), in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+        }
+        #else
+        shape.fill(.ultraThinMaterial)
+        #endif
     }
 }
 

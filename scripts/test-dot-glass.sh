@@ -6,6 +6,8 @@ test_dir="$(mktemp -d /tmp/dot-glass-check.XXXXXX)"
 trap 'rm -rf "$test_dir"' EXIT
 swiftc Widgets/DotGlass/DotModels.swift Widgets/DotGlass/DotDirectory.swift tests/dot-glass/URLPolicyTests.swift -o "$test_dir/policy"
 "$test_dir/policy"
+swiftc -parse-as-library Widgets/DotGlass/DotModels.swift Widgets/DotGlass/DotUnread.swift tests/dot-glass/UnreadTests.swift -o "$test_dir/unread"
+"$test_dir/unread"
 node --test tests/dot-glass/adapter.test.mjs
 python3 scripts/validate-widgets.py
 # Compile against the actual SDK and widget implementation; no account or network traffic.

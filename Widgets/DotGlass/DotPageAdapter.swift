@@ -12,8 +12,66 @@ enum DotPageAdapter {
       const room = () => /^\/dots\/[A-Za-z0-9-]+\/?$/.test(location.pathname) ? location.origin + location.pathname.replace(/\/$/, '') : '';
       const root = () => document.querySelector('.messaging-root') || document.querySelector('main');
       const editor = () => root()?.querySelector('.composer-wrap [contenteditable="true"], .composer-wrap textarea, [contenteditable="true"][role="textbox"], #prompt-textarea, textarea[placeholder]');
-      const readRows = () => Array.from(root()?.querySelectorAll('.message-row') || []).slice(-100).map((row) => {
-        let id = row.getAttribute('data-message-id') || row.id;
+      const messageSelector = '.message-row, [data-message-author-role="user"], [data-message-author-role="assistant"], [data-author-role="user"], [data-author-role="assistant"]';
+      const receiptSelector = '[data-read], [data-read-receipt], [data-read-state], [data-message-read-status], [data-message-status], [data-delivery-status], [data-status], [data-state], [data-testid*="read" i], [data-testid*="receipt" i], .message-meta, [class*="receipt" i], [class*="status" i], [role="status"], [aria-label], [title]';
+      const normalize = s => (s || '').replace(/\s+/g, ' ').trim();
+      const readLabel = value => {
+        const label = normalize(value);
+        if (/^Read(?:$|\s+(?:by|at|on)\b|\s+\d|\s*[·•])/i.test(label)) return label;
+        if (/^Seen(?:$|\s+(?:by|at|on)\b|\s+\d|\s*[·•])/i.test(label)) return label.replace(/^Seen/i, 'Read');
+        return null;
+      };
+      const isMine = row => row.classList.contains('self') || row.classList.contains('user') ||
+        ['user', 'human', 'self'].includes((row.getAttribute('data-message-author-role') || row.getAttribute('data-author-role') || row.getAttribute('data-author') || '').toLowerCase()) ||
+        row.getAttribute('data-is-user') === 'true';
+      function receiptIn(container, includeContainer = false) {
+        if (!container) return null;
+        const nodes = includeContainer && container.matches(receiptSelector) ? [container] : [];
+        nodes.push(...Array.from(container.querySelectorAll(receiptSelector)));
+        for (const node of nodes) {
+          if (!visible(node)) continue;
+          const label = [node.innerText, node.getAttribute('aria-label'), node.getAttribute('title'), node.getAttribute('data-read-receipt')]
+            .map(readLabel).find(Boolean);
+          if (label) return label.slice(0, 100);
+          const markers = [
+            ['data-read', node.getAttribute('data-read')],
+            ['data-read-receipt', node.getAttribute('data-read-receipt')],
+            ['data-read-state', node.getAttribute('data-read-state')],
+            ['data-message-read-status', node.getAttribute('data-message-read-status')],
+            ['data-message-status', node.getAttribute('data-message-status')],
+            ['data-delivery-status', node.getAttribute('data-delivery-status')],
+            ['data-status', node.getAttribute('data-status')],
+            ['data-state', node.getAttribute('data-state')]
+          ].filter(([, value]) => value !== null).map(([name, value]) => [name, normalize(value).toLowerCase()]);
+          const negative = markers.some(([, value]) => ['false', 'unread', 'unseen', 'unreaded', 'pending', 'sent', 'delivered'].includes(value));
+          const positive = markers.some(([name, value]) => ['read', 'seen'].includes(value) ||
+            (['data-read', 'data-read-receipt', 'data-read-state', 'data-message-read-status'].includes(name) && ['true', '1'].includes(value)));
+          const semantic = node.matches('[data-testid*="read-receipt" i], [data-testid*="message-read-status" i], [class*="read-receipt" i], [class*="message-receipt" i], [data-read-receipt]');
+          if (!negative && (semantic || positive)) return 'Read';
+        }
+        return null;
+      }
+      function readReceipt(row) {
+        // Status metadata may be attached to the outgoing row itself.
+        const direct = receiptIn(row, true);
+        if (direct) return direct;
+        // ChatGPT may render the receipt beside the outgoing bubble instead of inside it.
+        let sibling = row.nextElementSibling;
+        for (let step = 0; sibling && step < 2; step++, sibling = sibling.nextElementSibling) {
+          if (sibling.matches(messageSelector) || sibling.querySelector(messageSelector)) break;
+          const nested = receiptIn(sibling, true);
+          if (nested) return nested;
+          const plainStatus = readLabel(sibling.innerText);
+          if (visible(sibling) && plainStatus) return plainStatus.slice(0, 100);
+        }
+        return null;
+      }
+      const readRows = () => {
+        const scope = root();
+        let rows = Array.from(scope?.querySelectorAll('.message-row') || []);
+        if (!rows.length) rows = Array.from(scope?.querySelectorAll(messageSelector) || []);
+        return rows.slice(-100).map((row) => {
+        let id = row.getAttribute('data-message-id') || row.getAttribute('data-id') || row.id;
         if (!id) { if (!rowIDs.has(row)) rowIDs.set(row, 'row-' + (++nextID)); id = rowIDs.get(row); }
         const parts = row.querySelectorAll('[data-orbit-message-text-part]');
         let text = parts.length ? Array.from(parts).map(p => p.innerText).join('\n\n') :
@@ -22,14 +80,17 @@ enum DotPageAdapter {
           const bubble = row.querySelector('.message-bubble');
           if (bubble) {
             const clone = bubble.cloneNode(true);
-            clone.querySelectorAll('button, .message-inline-actions, .message-meta, svg, [aria-hidden="true"]').forEach(n => n.remove());
+            clone.querySelectorAll('button, .message-inline-actions, .message-meta, .read-receipt, .message-status, [data-read-receipt], [data-testid*="receipt" i], svg, [aria-hidden="true"]').forEach(n => n.remove());
             text = clone.textContent || '';
           }
         }
         const hasAttachment = !!row.querySelector('img, video, [data-orbit-message-writing-block], .attachment-card, [data-mcp-confirmation-chip]');
-        return { id, text: (text || '').trim().slice(0, 32000), isMine: row.classList.contains('self'), hasAttachment };
+        const mine = isMine(row);
+        // A reply, an outgoing bubble, or typing state alone is never a read receipt.
+        const receipt = mine ? readReceipt(row) : null;
+        return { readReceipt: receipt, id, text: (text || '').trim().slice(0, 32000), isMine: mine, hasAttachment };
       }).filter(m => m.text || m.hasAttachment);
-      const normalize = s => s.replace(/\s+/g, ' ').trim();
+      };
       function snapshot() {
         const conversation = room(), messages = conversation ? readRows() : [];
         let acknowledgement = null;
@@ -55,7 +116,7 @@ enum DotPageAdapter {
       }
       function schedule() { if (timer) return; timer = setTimeout(() => { timer = null; publish(); }, 180); }
       const observer = new MutationObserver(schedule);
-      observer.observe(document.documentElement, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['disabled','data-visible','aria-busy']});
+      observer.observe(document.documentElement, {subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['disabled','data-visible','aria-busy','aria-hidden','data-read','data-read-receipt','data-read-state','data-message-read-status','data-message-status','data-delivery-status','aria-label','title','class','style','data-testid','data-state','data-status','data-message-author-role','data-author-role','data-is-user']});
 
       const send = async (text, token, expectedRoom) => {
         const conversation = room(), input = editor();

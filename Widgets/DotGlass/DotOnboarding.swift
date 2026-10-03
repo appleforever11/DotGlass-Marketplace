@@ -24,7 +24,6 @@ struct DotOnboarding: View {
             Spacer(minLength: 12)
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(RadialGradient(colors: [.cyan.opacity(0.12), .clear], center: .top, startRadius: 0, endRadius: 380))
-            .modifier(DotGlassSurface())
             .clipShape(RoundedRectangle(cornerRadius: 28))
     }
 }

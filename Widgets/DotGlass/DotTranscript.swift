@@ -34,6 +34,7 @@ struct DotTranscript: View {
                 .onPreferenceChange(DotBottomKey.self) { bottom in
                     atBottom = bottom <= geometry.size.height + 35
                     if atBottom { unread = false }
+                    connection.transcriptPositionChanged(atBottom: atBottom)
                 }
                 .onChange(of: connection.messages) { _, _ in
                     if atBottom { scroll(proxy) } else { unread = true }
@@ -55,6 +56,7 @@ struct DotTranscript: View {
     }
 
     private func bubble(_ message: DotMessage) -> some View {
+        VStack(alignment: message.isMine ? .trailing : .leading, spacing: 4) {
         HStack(alignment: .bottom, spacing: 0) {
             if message.isMine { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 8) {
@@ -77,6 +79,11 @@ struct DotTranscript: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(message.isMine ? "You" : connection.name): \(message.text)")
             if !message.isMine { Spacer(minLength: 30) }
+        }
+        if message.isMine, let receipt = message.readReceipt {
+            Text(receipt).font(.caption2).foregroundStyle(.secondary)
+                .padding(.trailing, 4).accessibilityLabel(receipt)
+        }
         }
     }
 }

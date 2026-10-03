@@ -9,10 +9,34 @@ import WebKit
 final class DotConnection: NSObject {
     @ObservationIgnored let callLog = Logger(subsystem: "dot-glass", category: "Call")
     var messages: [DotMessage] = []
+    private var unreadState = DotUnread()
+    var unreadCount = 0
+    var transcriptAtBottom = false
+    @ObservationIgnored private lazy var notifications = DotNotifications(defaults: defaults)
+    var notificationsEnabled = false
+
+    func enableNotifications() {
+        Task { @MainActor in
+            notificationsEnabled = await notifications.enable()
+            if !notificationsEnabled {
+                notice = "Allow notifications for DockDoor Pro in System Settings → Notifications, then try again."
+            }
+        }
+    }
+    func disableNotifications() { notifications.disable(); notificationsEnabled = false }
+    func markMessagesRead() {
+        unreadState.markRead(); unreadCount = 0; notifications.clear()
+    }
+    func transcriptPositionChanged(atBottom: Bool) {
+        transcriptAtBottom = atBottom
+        if atBottom && !visiblePanels.isEmpty { markMessagesRead() }
+    }
     var name = "Your dot"
     var ready = false
     var loading = false
     var typing = false
+    private var textActivityUntil = Date.distantPast
+    private var textActivityPhase = DotPhase.thinking
     var mediaPlaying = false
     var pendingToken: String?
     var draft = ""
@@ -29,6 +53,8 @@ final class DotConnection: NSObject {
     private var visiblePanels = Set<UUID>()
     var voiceConnected = false
     var voiceLevel = 0.0
+    private var speechActivity = DotSpeechActivity()
+    var voiceSpeaking: Bool { speechActivity.isSpeaking }
     var voiceMeterAvailable = false
     var microphoneMuted = false
     var microphoneChangePending = false
@@ -47,6 +73,7 @@ final class DotConnection: NSObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         super.init()
+        notificationsEnabled = defaults.bool(forKey: "dot-glass.notifications")
         if let data = defaults.data(forKey: "dot-glass.directory"),
            let saved = try? JSONDecoder().decode(DotDirectory.self, from: data) {
             for profile in saved.profiles { directory.remember(url: profile.url, name: profile.name) }
@@ -75,9 +102,10 @@ final class DotConnection: NSObject {
     @ObservationIgnored private var lastTranscriptTick = Date.distantPast
 
     /// Driven by visible panel/dock timelines. A hidden panel keeps voice sampling
-    /// only while a call is active; idle hidden sessions do no polling.
+    /// while connected. Hidden-panel transcript sampling is bounded to three seconds
+    /// and only runs when the host renders the dock timeline.
     func tick() {
-        guard !visiblePanels.isEmpty || voiceStarting || voiceConnected else { return }
+        guard !conversation.isEmpty || !visiblePanels.isEmpty || voiceStarting || voiceConnected else { return }
         guard !tickInFlight, Date().timeIntervalSince(lastTick) >= 0.24,
               webView.url?.host == "chatgpt.com" else { return }
         if voiceStarting || voiceConnected {
@@ -88,8 +116,9 @@ final class DotConnection: NSObject {
             }
         }
         let now = Date()
-        let refreshTranscript = !visiblePanels.isEmpty && now.timeIntervalSince(lastTranscriptTick) >= 1.5
+        let refreshTranscript = now.timeIntervalSince(lastTranscriptTick) >= (!visiblePanels.isEmpty ? 1.5 : 3)
         guard refreshTranscript || voiceStarting || voiceConnected else { return }
+        if textActivityUntil != .distantPast && now >= textActivityUntil { textActivityUntil = .distantPast }
         lastTick = now; tickInFlight = true
         if refreshTranscript { lastTranscriptTick = now }
         webView.callAsyncJavaScript("if (refreshTranscript) window.__dotGlass?.refresh(); await window.__dotGlassVoice?.sample();", arguments: ["refreshTranscript": refreshTranscript], in: nil, in: .page) { [weak self] _ in
@@ -98,11 +127,12 @@ final class DotConnection: NSObject {
     }
 
     var phase: DotPhase {
-        if voiceConnected && voiceLevel > 0.025 { return .speaking }
+        if voiceConnected && voiceSpeaking { return .speaking }
         if voiceConnected { return .inCall }
         if voiceStarting { return .connecting }
         if pendingToken != nil { return .sending }
         if typing { return .thinking }
+        if textActivityUntil > Date() { return textActivityPhase }
         if ready { return .ready }
         return loading ? .connecting : .offline
     }
@@ -166,7 +196,7 @@ final class DotConnection: NSObject {
             showConnection = true
             return
         }
-        hydrated = false; ready = false; loading = true; notice = nil
+        hydrated = false; unreadState.reset(); unreadCount = 0; ready = false; loading = true; notice = nil
         webView.reload()
     }
 
@@ -208,7 +238,7 @@ final class DotConnection: NSObject {
         if incoming != conversation {
             if targetConversation == nil { drafts[conversation] = draft; draft = drafts[incoming] ?? "" }
             targetConversation = nil
-            hydrated = false; seen.removeAll()
+            hydrated = false; seen.removeAll(); unreadState.reset(); unreadCount = 0
             if pendingToken != nil { notice = "The conversation changed. Check delivery before sending again." }
             pendingToken = nil; timeout?.cancel()
             conversation = incoming
@@ -232,7 +262,26 @@ final class DotConnection: NSObject {
             requestedSignIn = false; completingSetup = false; needsSetup = false; showConnection = false
         }
         typing = snapshot.typing; mediaPlaying = snapshot.mediaPlaying
-        messages = snapshot.messages
+        if hydrated, let latest = snapshot.messages.last,
+           messages.first(where: { $0.id == latest.id })?.text != latest.text {
+            textActivityPhase = latest.isMine ? .sending : .thinking
+            textActivityUntil = Date().addingTimeInterval(2)
+        }
+        let previousReceipts = messages.reduce(into: [String: String]()) { receipts, message in
+            if let receipt = message.readReceipt { receipts[message.id] = receipt }
+        }
+        messages = snapshot.messages.map { message in
+            guard message.readReceipt == nil, let receipt = previousReceipts[message.id] else { return message }
+            var updated = message
+            updated.readReceipt = receipt
+            return updated
+        }
+        let reading = !visiblePanels.isEmpty && transcriptAtBottom && !showConnection && !showTour
+        let newReplies = unreadState.update(room: incoming, messages: snapshot.messages,
+                                            typing: snapshot.typing, reading: reading)
+        unreadCount = unreadState.count
+        if reading { notifications.clear() }
+        else if newReplies > 0 { notifications.notify() }
         if let token = pendingToken, snapshot.acknowledgement == token {
             pendingToken = nil; timeout?.cancel()
             if draft == submittedDraft { draft = "" }
@@ -326,7 +375,7 @@ final class DotConnection: NSObject {
                 if case .success(let value) = result, let status = value as? String,
                    ["changed", "unchanged"].contains(status) {
                     self.notice = nil
-                    self.webView.evaluateJavaScript("window.__dotGlassVoice?.sample();", completionHandler: nil)
+                    self.webView.callAsyncJavaScript("await window.__dotGlassVoice?.sample();", arguments: [:], in: nil, in: .page, completionHandler: nil)
                 } else {
                     self.notice = "Open the connection view to change ChatGPT’s microphone control."
                 }
@@ -336,11 +385,13 @@ final class DotConnection: NSObject {
 
     func panelAppeared(_ identity: UUID) {
         visiblePanels.insert(identity)
+        if transcriptAtBottom { markMessagesRead() }
         callLog.notice("Conversation panel appeared")
     }
 
     func panelDisappeared(_ identity: UUID) {
         visiblePanels.remove(identity)
+        if visiblePanels.isEmpty { transcriptAtBottom = false }
         // The plugin owns the call. DockDoor may dismiss its panel on focus
         // changes; hiding presentation must never revoke active microphone use.
         callLog.notice("Conversation panel hidden; active call retained")
@@ -355,7 +406,8 @@ final class DotConnection: NSObject {
         webView.setMicrophoneCaptureState(.none, completionHandler: nil)
         webView.pauseAllMediaPlayback(completionHandler: nil)
         if voiceConnected || hadCapture || wasStarting { webView.load(URLRequest(url: DotURLPolicy.conversation(conversation) ?? DotURLPolicy.home)) }
-        voiceConnected = false; voiceLevel = 0; microphoneMuted = false; microphoneChangePending = false
+        voiceConnected = false; voiceLevel = 0; _ = speechActivity.update(connected: false, level: 0)
+        microphoneMuted = false; microphoneChangePending = false
     }
     func receiveVoice(_ value: DotVoiceSnapshot) {
         if value.connected != voiceConnected { callLog.notice("WebRTC connection changed: \(value.connected)") }
@@ -376,6 +428,7 @@ final class DotConnection: NSObject {
         }
         voiceConnected = value.connected
         voiceLevel = min(1, max(0, value.level.isFinite ? value.level : 0))
+        _ = speechActivity.update(connected: value.connected, level: voiceLevel)
         voiceMeterAvailable = value.meterAvailable
         microphoneMuted = value.connected && ((value.muted ?? false) || webView.microphoneCaptureState == .muted)
     }

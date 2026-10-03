@@ -5,6 +5,7 @@ struct DotMessage: Identifiable, Codable, Equatable {
     let text: String
     let isMine: Bool
     let hasAttachment: Bool
+    var readReceipt: String? = nil
 }
 
 struct DotSnapshot: Decodable {
@@ -58,4 +59,27 @@ struct DotVoiceSnapshot: Decodable {
     let level: Double
     let meterAvailable: Bool
     var muted: Bool? = nil
+}
+
+/// Turns incoming audio metadata into a stable speaking on/off signal.
+/// The ring uses this boolean; loudness never changes its animation strength.
+struct DotSpeechActivity {
+    private(set) var isSpeaking = false
+    private var holdUntil = Date.distantPast
+
+    mutating func update(connected: Bool, level: Double, now: Date = Date()) -> Bool {
+        guard connected else {
+            isSpeaking = false
+            holdUntil = .distantPast
+            return false
+        }
+        let finiteLevel = level.isFinite ? max(0, level) : 0
+        if finiteLevel >= 0.01 {
+            isSpeaking = true
+            holdUntil = now.addingTimeInterval(0.42)
+        } else if now >= holdUntil {
+            isSpeaking = false
+        }
+        return isSpeaking
+    }
 }

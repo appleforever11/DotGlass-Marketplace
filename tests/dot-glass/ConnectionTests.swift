@@ -9,19 +9,29 @@ struct ConnectionChecks {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let connection = DotConnection(defaults: defaults)
+        var speech = DotSpeechActivity()
+        let speechStart = Date(timeIntervalSince1970: 100)
+        precondition(speech.update(connected: true, level: 0.01, now: speechStart), "Quiet Dot speech must activate the speaking state")
+        precondition(speech.update(connected: true, level: 0, now: speechStart.addingTimeInterval(0.2)), "Brief audio gaps must not flicker the speaking state")
+        precondition(!speech.update(connected: true, level: 0, now: speechStart.addingTimeInterval(0.43)), "Speaking must settle after incoming audio stops")
+        precondition(!speech.update(connected: false, level: 1, now: speechStart.addingTimeInterval(0.5)), "Disconnect must not retain speech activity")
         connection.loadSaved()
         precondition(connection.needsSetup && !connection.loading)
         connection.startCall()
         precondition(!connection.voiceStarting, "Calling must require a ready conversation")
         let room = "https://chatgpt.com/dots/00000000-0000-0000-0000-000000000001"
         let message = DotMessage(id: "fixture", text: "Test fixture only", isMine: false, hasAttachment: false)
-        func snapshot(_ url: String, acknowledgement: String? = nil) -> DotSnapshot {
-            DotSnapshot(signedIn: false, conversation: url, name: "Fixture", ready: true, typing: false, mediaPlaying: false, messages: [message], acknowledgement: acknowledgement)
+        func snapshot(_ url: String, acknowledgement: String? = nil, messages: [DotMessage]? = nil) -> DotSnapshot {
+            DotSnapshot(signedIn: false, conversation: url, name: "Fixture", ready: true, typing: false, mediaPlaying: false, messages: messages ?? [message], acknowledgement: acknowledgement)
         }
         connection.receive(snapshot(room))
         precondition(connection.ready && connection.messages == [message])
         precondition(defaults.string(forKey: "dot-glass.conversationURL") == room)
         precondition(defaults.string(forKey: "dotGlass.conversationURL") == nil)
+        let acknowledged = DotMessage(id: "fixture", text: "Test fixture only", isMine: false, hasAttachment: false, readReceipt: "Read 10:44 PM")
+        connection.receive(snapshot(room, messages: [acknowledged]))
+        connection.receive(snapshot(room))
+        precondition(connection.messages.first?.readReceipt == "Read 10:44 PM", "An observed receipt should remain with its message for this connection")
         connection.draft = "Keep my draft"
         connection.receive(snapshot("https://untrusted.example/dots/00000000-0000-0000-0000-000000000001"))
         precondition(!connection.ready && connection.messages.isEmpty)

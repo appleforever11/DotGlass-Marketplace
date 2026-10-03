@@ -15,7 +15,7 @@ struct BundleLoadChecks {
         }
         precondition(provider.id == "dot-glass")
         precondition(provider.name == "Dot Glass")
-        precondition(provider.settingsSchema().count == 1)
+        precondition(provider.settingsSchema().count == 2)
         for (size, vertical) in [(CGSize(width: 64, height: 64),false),(CGSize(width: 128, height: 64),false),(CGSize(width: 64, height: 64),true),(CGSize(width: 64, height: 128),true)] {
             _ = provider.makeBody(size: size, isVertical: vertical)
         }

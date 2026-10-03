@@ -1,4 +1,5 @@
 import SwiftUI
+import DockDoorWidgetSDK
 
 @MainActor
 struct DotPanel: View {
@@ -7,8 +8,12 @@ struct DotPanel: View {
     @State private var selectedTheme = DotTheme.current
     @State private var panelIdentity = UUID()
     @State private var showDotPicker = false
+    private var glassOpacity: Double { WidgetDefaults.double(key: "glassOpacity", widgetId: "dot-glass", default: 0.68) }
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var panelGlassOpacity: Double { min(1, max(0.2, glassOpacity)) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,7 +33,8 @@ struct DotPanel: View {
             }
         }
         .environment(\.dotTheme, selectedTheme)
-        .modifier(DotGlassSurface())
+        .environment(\.dotGlassOpacity, panelGlassOpacity)
+        .modifier(DotGlassSurface(opacity: panelGlassOpacity))
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(.white.opacity(0.13), lineWidth: 0.7).allowsHitTesting(false))
         .sheet(isPresented: $showDotPicker) { DotPicker(connection: connection) }
@@ -79,7 +85,16 @@ struct DotPanel: View {
                     Button { connection.showConnection = true } label: { Label("Manage connection", systemImage: "person.crop.circle") }
                     Button(action: connection.openBrowser) { Label("Open in browser", systemImage: "safari") }
                 }
+                Section("Notifications") {
+                    if connection.notificationsEnabled {
+                        Button("Turn off notifications", action: connection.disableNotifications)
+                    } else {
+                        Button("Enable native notifications", action: connection.enableNotifications)
+                    }
+                    Text("Delivered by DockDoor Pro · message text stays private")
+                }
                 Section("Help") {
+                    Text("Dot Glass review candidate")
                     Button { connection.showTour = true } label: { Label("Quick tour", systemImage: "sparkles") }
                     Button(action: connection.reload) { Label("Reconnect", systemImage: "arrow.clockwise") }
                 }
@@ -96,7 +111,7 @@ struct DotPanel: View {
     private var conversation: some View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
-                DotRing(phase: connection.phase, energy: connection.voiceLevel, diameter: 98)
+                DotRing(phase: connection.phase, diameter: 98)
                 Text(connection.voiceConnected && connection.microphoneMuted ? "Microphone muted · Dot can’t hear you" : connection.phase.rawValue)
                     .font(.caption).foregroundStyle(connection.voiceConnected && connection.microphoneMuted ? Color.orange : Color.secondary)
             }.padding(.top, 4).padding(.bottom, 12).frame(maxWidth: .infinity)
@@ -142,7 +157,14 @@ struct DotPanel: View {
                     .background(connection.canSend ? Color.blue : Color.primary.opacity(0.06), in: Circle())
             }.buttonStyle(.plain).disabled(!connection.canSend).help("Send message").accessibilityLabel("Send message")
         }.padding(8)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 25, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 25, style: .continuous)
+                if reduceTransparency {
+                    shape.fill(.regularMaterial)
+                } else {
+                    shape.fill(.ultraThinMaterial).opacity(panelGlassOpacity)
+                }
+            }
             .overlay(RoundedRectangle(cornerRadius: 25).strokeBorder(.primary.opacity(focused ? 0.18 : 0.08), lineWidth: 0.7))
             .padding(.horizontal, 16).padding(.top, 5).padding(.bottom, 16)
     }
